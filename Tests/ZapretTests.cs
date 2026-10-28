@@ -258,7 +258,10 @@ static partial class Program
     static string MakeZapretFixture(string root)
     {
         Directory.CreateDirectory(Path.Combine(root, "bin")); Directory.CreateDirectory(Path.Combine(root, "lists")); Directory.CreateDirectory(Path.Combine(root, "utils"));
-        File.Copy(@"C:\zapret\bin\winws.exe", Path.Combine(root, "bin", "winws.exe"), true);
+        // Inspect() needs a structurally valid PE, not a working bypass binary.
+        // These fixtures use FakeZapretSystem and are never executed. Keeping a
+        // PE from our own build makes CI independent of anyone's C:\zapret.
+        File.Copy(typeof(MainWindow).Assembly.Location, Path.Combine(root, "bin", "winws.exe"), true);
         File.WriteAllBytes(Path.Combine(root, "bin", "WinDivert.dll"), [0]);
         File.WriteAllBytes(Path.Combine(root, "bin", "WinDivert64.sys"), [0]);
         File.WriteAllText(Path.Combine(root, "bin", "fake.bin"), "fixture"); File.WriteAllText(Path.Combine(root, "lists", "list-general.txt"), "example.test");
