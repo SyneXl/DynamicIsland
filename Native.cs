@@ -18,8 +18,11 @@ static class Native
     const long WS_EX_NOREDIRECTIONBITMAP = 0x00200000;
     const long WS_POPUP = 0x80000000;
     const uint LWA_ALPHA = 2;
-    const int SW_SHOWNOACTIVATE = 4;
-    const uint SWP_NOSIZE = 0x0001, SWP_NOMOVE = 0x0002, SWP_NOACTIVATE = 0x0010;
+    const int SW_HIDE = 0, SW_SHOWNOACTIVATE = 4;
+    const int SM_XVIRTUALSCREEN = 76, SM_YVIRTUALSCREEN = 77, SM_CXVIRTUALSCREEN = 78, SM_CYVIRTUALSCREEN = 79;
+    const int MDT_EFFECTIVE_DPI = 0;
+    const double DefaultDpi = 96;
+    const uint SWP_NOSIZE = 0x0001, SWP_NOMOVE = 0x0002, SWP_NOZORDER = 0x0004, SWP_NOACTIVATE = 0x0010;
     const uint MONITOR_DEFAULTTONEAREST = 2;
     const uint MONITORINFOF_PRIMARY = 1;
     const int VK_CONTROL = 0x11;
@@ -30,10 +33,14 @@ static class Native
     const int DWMWA_USE_HOSTBACKDROPBRUSH = 17;
     const int DQTYPE_THREAD_CURRENT = 2, DQTAT_COM_STA = 2;
     static readonly IntPtr HWND_TOPMOST = new(-1);
+    static bool _dispatcherQueueStarted;
     static readonly int ShellMessage = (int)RegisterWindowMessage("SHELLHOOK");
 
     [StructLayout(LayoutKind.Sequential)]
     struct RECT { public int Left, Top, Right, Bottom; }
+
+    [StructLayout(LayoutKind.Sequential)]
+    struct POINT { public int X, Y; }
 
     [StructLayout(LayoutKind.Sequential)]
     struct MONITORINFO { public int cbSize; public RECT rcMonitor, rcWork; public uint dwFlags; }
@@ -75,9 +82,13 @@ static class Native
     [DllImport("user32.dll")] static extern bool SetForegroundWindow(IntPtr hwnd);
     [DllImport("user32.dll")] static extern IntPtr GetDesktopWindow();
     [DllImport("user32.dll")] static extern IntPtr GetShellWindow();
+    [DllImport("user32.dll")] static extern bool GetCursorPos(out POINT point);
     [DllImport("user32.dll")] static extern bool GetWindowRect(IntPtr hwnd, out RECT rect);
     [DllImport("user32.dll")] static extern IntPtr MonitorFromWindow(IntPtr hwnd, uint flags);
+    [DllImport("user32.dll")] static extern IntPtr MonitorFromPoint(POINT point, uint flags);
     [DllImport("user32.dll")] static extern bool GetMonitorInfo(IntPtr monitor, ref MONITORINFO info);
+    [DllImport("user32.dll")] static extern int GetSystemMetrics(int index);
+    [DllImport("shcore.dll")] static extern int GetDpiForMonitor(IntPtr monitor, int type, out uint dpiX, out uint dpiY);
 
     [DllImport("user32.dll", CharSet = CharSet.Unicode)]
     static extern int GetClassName(IntPtr hwnd, StringBuilder name, int max);
@@ -101,6 +112,8 @@ static class Native
 
     public static void BringForward(IntPtr hwnd) => SetForegroundWindow(hwnd);
 
+    public static Point CursorPosition => GetCursorPos(out POINT at) ? new Point(at.X, at.Y) : default;
+
     public static bool IsCtrlDown => GetAsyncKeyState(VK_CONTROL) < 0;
 
     public static bool RegisterShellHook(IntPtr hwnd) => RegisterShellHookWindow(hwnd);
@@ -114,11 +127,37 @@ static class Native
         SetWindowLongPtr(hwnd, GWL_EXSTYLE, new IntPtr(style | WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE));
     }
 
-    public static IntPtr CreateBackdropWindow()
+    public static Int32Rect VirtualScreen => new(GetSystemMetrics(SM_XVIRTUALSCREEN), GetSystemMetrics(SM_YVIRTUALSCREEN),
+        GetSystemMetrics(SM_CXVIRTUALSCREEN), GetSystemMetrics(SM_CYVIRTUALSCREEN));
+
+    static IntPtr MonitorAt(Point point) => MonitorFromPoint(new POINT { X = (int)point.X, Y = (int)point.Y }, MONITOR_DEFAULTTONEAREST);
+
+    public static double ScaleAt(Point point) =>
+        GetDpiForMonitor(MonitorAt(point), MDT_EFFECTIVE_DPI, out uint dpi, out _) == 0 && dpi > 0 ? dpi / DefaultDpi : 1;
+
+    public static Rect WorkAreaAt(Point point)
+    {
+        var info = new MONITORINFO { cbSize = Marshal.SizeOf<MONITORINFO>() };
+        IntPtr monitor = MonitorAt(point);
+        if (!GetMonitorInfo(monitor, ref info)) return Rect.Empty;
+        RECT work = info.rcWork;
+        return new Rect(work.Left, work.Top, work.Right - work.Left, work.Bottom - work.Top);
+    }
+
+    public static void MoveAndSize(IntPtr hwnd, int x, int y, int width, int height) =>
+        SetWindowPos(hwnd, IntPtr.Zero, x, y, width, height, SWP_NOZORDER | SWP_NOACTIVATE);
+
+    public static IntPtr CreateOverlayWindow()
     {
         long style = WS_EX_NOREDIRECTIONBITMAP | WS_EX_LAYERED | WS_EX_TRANSPARENT | WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE | WS_EX_TOPMOST;
         IntPtr hwnd = CreateWindowEx((uint)style, "Static", null, (uint)WS_POPUP, 0, 0, 0, 0, IntPtr.Zero, IntPtr.Zero, IntPtr.Zero, IntPtr.Zero);
         SetLayeredWindowAttributes(hwnd, 0, byte.MaxValue, LWA_ALPHA);
+        return hwnd;
+    }
+
+    public static IntPtr CreateBackdropWindow()
+    {
+        IntPtr hwnd = CreateOverlayWindow();
         int on = 1;
         DwmSetWindowAttribute(hwnd, DWMWA_USE_HOSTBACKDROPBRUSH, ref on, sizeof(int));
         return hwnd;
@@ -133,10 +172,18 @@ static class Native
         ShowWindow(hwnd, SW_SHOWNOACTIVATE);
     }
 
-    public static bool StartDispatcherQueue()
+    public static void PutBehind(IntPtr hwnd, IntPtr front) =>
+        SetWindowPos(hwnd, front, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+
+    public static void ShowQuietly(IntPtr hwnd) => ShowWindow(hwnd, SW_SHOWNOACTIVATE);
+
+    public static void Hide(IntPtr hwnd) => ShowWindow(hwnd, SW_HIDE);
+
+    public static void EnsureDispatcherQueue()
     {
+        if (_dispatcherQueueStarted) return;
         var options = new DispatcherQueueOptions { dwSize = Marshal.SizeOf<DispatcherQueueOptions>(), threadType = DQTYPE_THREAD_CURRENT, apartmentType = DQTAT_COM_STA };
-        return CreateDispatcherQueueController(options, out _) >= 0;
+        _dispatcherQueueStarted = CreateDispatcherQueueController(options, out _) >= 0;
     }
 
     public static bool IsToolWindow(IntPtr hwnd) => (GetWindowLongPtr(hwnd, GWL_EXSTYLE).ToInt64() & WS_EX_TOOLWINDOW) != 0;

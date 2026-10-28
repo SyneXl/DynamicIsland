@@ -25,6 +25,7 @@ sealed class MediaService : IDisposable
     const int PollPlayingMs = 250, PollPausedMs = 1000;
     const int UnsetYear = 2000;
     const int MetadataTimeoutMs = 3000, RetryMs = 1000, SessionScanMs = 1000;
+    const int BarMissesToForget = 3;
 
     readonly Dispatcher _ui;
     readonly Action<Exception> _log;
@@ -60,6 +61,7 @@ sealed class MediaService : IDisposable
     string _barText = "", _barTitle = "", _barArtist = "";
     TimeSpan _barTime = TimeSpan.MinValue;
     int _barPercent = -1;
+    int _barMisses;
     TimeSpan _measuredLength;
     TimeSpan _assumedLength;
 
@@ -626,14 +628,15 @@ sealed class MediaService : IDisposable
                 int dash = bar.Text.IndexOf(BarSeparator, StringComparison.Ordinal);
                 (_barArtist, _barTitle) = dash > 0 ? (bar.Text[..dash], bar.Text[(dash + BarSeparator.Length)..]) : ("", bar.Text);
             }
-            if (bar.Time != _barTime)
+            _barMisses = 0;
+            if (bar.Time is { } time && time != _barTime)
             {
-                _barTime = _position = bar.Time;
+                _barTime = _position = time;
                 _positionAt = DateTime.UtcNow;
             }
             MeasureLength(bar.Percent);
         }
-        else if (_barFound)
+        else if (_barFound && ++_barMisses >= BarMissesToForget)
         {
             ForgetBar();
         }

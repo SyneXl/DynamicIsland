@@ -50,6 +50,7 @@ sealed class AudioService
 
     public void AdjustVolume(float delta)
     {
+        _checkedAt = DateTime.MinValue;
         RefreshDevice();
         if (_volume == null || _volume.GetMasterVolumeLevelScalar(out float level) != 0) return;
         Guid context = Guid.Empty;

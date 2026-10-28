@@ -1,22 +1,14 @@
 using System.Numerics;
-using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Interop;
 using System.Windows.Media;
 using Windows.UI.Composition;
 using Windows.UI.Composition.Desktop;
-using WinRT;
 
 namespace DynamicIsland;
 
 sealed class Glass
 {
-    [ComImport, Guid("29E691FA-4567-4DCA-B319-D0F207EB6807"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
-    interface ICompositorDesktopInterop
-    {
-        void CreateDesktopWindowTarget(IntPtr hwnd, bool topmost, out IntPtr target);
-    }
-
     sealed class Pane
     {
         public readonly SpriteVisual Visual;
@@ -43,8 +35,6 @@ sealed class Glass
         }
     }
 
-    static bool _queueStarted;
-
     readonly Window _over;
     Compositor? _compositor;
     DesktopWindowTarget? _target;
@@ -55,17 +45,17 @@ sealed class Glass
 
     public bool IsOn => _target != null;
 
+    public IntPtr Handle => _hwnd;
+
     public void Show()
     {
         if (_target != null) return;
         try
         {
-            _queueStarted = _queueStarted || Native.StartDispatcherQueue();
+            Native.EnsureDispatcherQueue();
             _hwnd = Native.CreateBackdropWindow();
             _compositor = new Compositor();
-            _compositor.As<ICompositorDesktopInterop>().CreateDesktopWindowTarget(_hwnd, false, out IntPtr target);
-            _target = DesktopWindowTarget.FromAbi(target);
-            Marshal.Release(target);
+            _target = DesktopComposition.TargetFor(_compositor, _hwnd);
 
             CompositionBrush backdrop = _compositor.CreateHostBackdropBrush();
             Windows.UI.Composition.ContainerVisual root = _compositor.CreateContainerVisual();

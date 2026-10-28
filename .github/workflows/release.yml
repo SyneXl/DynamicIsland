@@ -1,0 +1,70 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing version tag (v1.29.0)
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ inputs.tag || github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    if: github.repository == 'SyneXl/DynamicIsland'
+    runs-on: windows-latest
+    permissions:
+      contents: write
+    env:
+      TAG: ${{ inputs.tag || github.ref_name }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ inputs.tag || github.ref_name }}
+      - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: 8.0.x
+      - name: Validate release identity
+        shell: pwsh
+        run: |
+          if ($env:TAG -notmatch '^v\d+\.\d+\.\d+$') { throw 'Use a stable vMAJOR.MINOR.PATCH tag.' }
+          [xml]$project = Get-Content DynamicIsland.csproj
+          if ($project.Project.PropertyGroup.Version -notcontains $env:TAG.Substring(1)) { throw 'Project version must match the tag.' }
+          if (!(Test-Path "docs/releases/$env:TAG.md")) { throw 'Write release notes before tagging.' }
+      - name: Core and UI regressions
+        run: dotnet run --project Tests/DynamicIsland.Tests.csproj -c Release
+      - name: Updater failure controls
+        run: dotnet run --project Tests/DynamicIsland.Tests.csproj -c Release --no-build -- --updater-tests
+      - name: Publish portable executable
+        shell: pwsh
+        run: |
+          dotnet publish DynamicIsland.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:EnableCompressionInSingleFile=true -p:DebugType=none -p:DebugSymbols=false -p:Version=$($env:TAG.Substring(1)) -o out
+          if ($LASTEXITCODE -ne 0) { throw 'Publish failed.' }
+          $process = Start-Process out/DynamicIsland.exe -ArgumentList '--smoke-test', "$pwd/out/smoke.json" -WindowStyle Hidden -PassThru
+          if (!$process.WaitForExit(30000)) { $process.Kill(); throw 'Smoke test timed out.' }
+          $result = Get-Content out/smoke.json | ConvertFrom-Json
+          if ($process.ExitCode -ne 0 -or !$result.ready) { throw 'WPF smoke test failed.' }
+          $hash = (Get-FileHash out/DynamicIsland.exe -Algorithm SHA256).Hash.ToLowerInvariant()
+          "$hash  DynamicIsland.exe" | Set-Content out/SHA256SUMS.txt -Encoding utf8NoBOM
+      - name: Publish complete release atomically
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $repo = 'SyneXl/DynamicIsland'
+          gh release create $env:TAG out/DynamicIsland.exe out/SHA256SUMS.txt --repo $repo --verify-tag --draft --title "Dynamic Island $env:TAG" --notes-file "docs/releases/$env:TAG.md"
+          if ($LASTEXITCODE -ne 0) { throw 'Draft release failed; existing releases are never overwritten.' }
+          $release = gh api "repos/$repo/releases/tags/$env:TAG" | ConvertFrom-Json
+          $asset = $release.assets | Where-Object name -eq 'DynamicIsland.exe'
+          $digest = 'sha256:' + (Get-FileHash out/DynamicIsland.exe -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($asset.digest -ne $digest) { throw 'GitHub asset digest does not match the tested EXE; release remains draft.' }
+          gh release edit $env:TAG --repo $repo --draft=false --latest
+          if ($LASTEXITCODE -ne 0) { throw 'Release publication failed.' }

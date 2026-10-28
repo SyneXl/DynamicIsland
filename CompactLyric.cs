@@ -86,6 +86,9 @@ public sealed class CompactLyric : FrameworkElement
 
     readonly VisualCollection _visuals;
     Cluster[] _clusters = [];
+    readonly List<TranslateTransform> _partShifts = [];
+    readonly List<Point> _partMiddles = [];
+    Parting? _parting;
     int _pieceCount;
     Size _size;
     LyricChange _change;
@@ -119,11 +122,27 @@ public sealed class CompactLyric : FrameworkElement
         _change = shown.Any(letter => letter is >= FirstJoinedLetter and <= LastJoinedLetter) ? LyricChange.Smooth : change;
 
         _visuals.Clear();
+        _partShifts.Clear();
+        _partMiddles.Clear();
         (int Start, int Length)[] parts = [.. Split(shown, _change)];
         _pieceCount = parts.Length;
         int clusterSize = Math.Max((parts.Length + MaxClusters - 1) / MaxClusters, 1);
         _clusters = [.. parts.Chunk(clusterSize).Select(cluster => CreateCluster(whole, shown, cluster, brush))];
+        _parting = _change == LyricChange.Wave ? new Parting([.. _partMiddles]) : null;
         InvalidateMeasure();
+    }
+
+    internal bool Part(Point? pointer, double dt)
+    {
+        if (_parting == null) return false;
+        bool moving = _parting.Advance(pointer, dt);
+        for (int i = 0; i < _parting.Count; i++)
+        {
+            Vector offset = _parting[i];
+            _partShifts[i].X = offset.X;
+            _partShifts[i].Y = offset.Y;
+        }
+        return moving;
     }
 
     internal void Enter()
@@ -217,7 +236,10 @@ public sealed class CompactLyric : FrameworkElement
         Brush fill = brush.Clone();
         var size = new ScaleTransform(1, 1, box.Left + box.Width / 2, _size.Height / 2);
         var shift = new TranslateTransform();
-        var visual = new DrawingVisual { Transform = new TransformGroup { Children = { size, shift } } };
+        var part = new TranslateTransform();
+        _partShifts.Add(part);
+        _partMiddles.Add(new Point(box.Left + box.Width / 2, _size.Height / 2));
+        var visual = new DrawingVisual { Transform = new TransformGroup { Children = { size, shift, part } } };
         TextOptions.SetTextHintingMode(visual, TextHintingMode.Animated);
         using (DrawingContext dc = visual.RenderOpen()) dc.DrawText(Format(text.Substring(start, length), fill), new Point(box.Left, 0));
         cluster.Children.Add(visual);

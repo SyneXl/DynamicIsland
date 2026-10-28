@@ -18,6 +18,7 @@ sealed class NetworkService
     const int PropVirtualInterface = 53;
     static readonly TimeSpan SettleTime = TimeSpan.FromSeconds(1.5);
     static readonly string[] VpnHints = ["VPN", "TAP-", "OpenVPN"];
+    static readonly State Unread = new(Link.None, "", false, "");
 
     readonly Dispatcher _ui;
     readonly DelayedAction _settle;
@@ -34,7 +35,7 @@ sealed class NetworkService
 
     public async Task StartAsync()
     {
-        _state = await Task.Run(ReadState);
+        _state = await Task.Run(ReadState) ?? Unread;
         Connectivity.NetworkStatusChanged += _ => ScheduleRefresh();
         NetworkChange.NetworkAddressChanged += (_, _) => ScheduleRefresh();
     }
@@ -50,17 +51,17 @@ sealed class NetworkService
         }
 
         _reading = true;
-        State now;
-        try { now = await Task.Run(ReadState); }
+        State? read;
+        try { read = await Task.Run(ReadState); }
         finally { _reading = false; }
 
-        if (now == _state) return;
+        if (read is not { } now || now == _state) return;
         State was = _state;
         _state = now;
         Changed?.Invoke(was, now);
     }
 
-    static State ReadState()
+    static State? ReadState()
     {
         Link link = Link.None;
         string name = "";
@@ -74,28 +75,20 @@ sealed class NetworkService
                 name = profile.ProfileName ?? "";
                 internet = profile.GetNetworkConnectivityLevel() == NetworkConnectivityLevel.InternetAccess;
             }
+            return new State(link, name, internet, ReadTunnels());
         }
         catch (Exception ex)
         {
             App.Log(ex);
+            return null;
         }
-        return new State(link, name, internet, ReadTunnels());
     }
 
-    static string ReadTunnels()
-    {
-        try
-        {
-            return string.Join(TunnelSeparator, NetworkInterface.GetAllNetworkInterfaces()
-                .Where(nic => nic.OperationalStatus == OperationalStatus.Up && IsTunnel(nic))
-                .Select(nic => nic.Name)
-                .Order(StringComparer.Ordinal));
-        }
-        catch
-        {
-            return "";
-        }
-    }
+    static string ReadTunnels() =>
+        string.Join(TunnelSeparator, NetworkInterface.GetAllNetworkInterfaces()
+            .Where(nic => nic.OperationalStatus == OperationalStatus.Up && IsTunnel(nic))
+            .Select(nic => nic.Name)
+            .Order(StringComparer.Ordinal));
 
     static bool IsTunnel(NetworkInterface nic) =>
         nic.NetworkInterfaceType == NetworkInterfaceType.Ppp

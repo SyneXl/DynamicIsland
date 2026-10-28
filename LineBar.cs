@@ -263,10 +263,10 @@ public sealed class LineBar : FrameworkElement
         dc.DrawGeometry(Shades.White(UnplayedOpacity), null, shape);
         if (fill <= 0) return;
 
-        double radius = Math.Min(ThicknessOf(_columns[ColumnAt(fill)]) / 2, fill / 2);
+        double radius = Math.Min(ThicknessOf(_columns[ColumnAt(fill)]) / 2, width / 2);
         var reach = new CombinedGeometry(GeometryCombineMode.Union,
             new RectangleGeometry(new Rect(0, 0, Math.Max(0, fill - radius), ActualHeight)),
-            new RectangleGeometry(new Rect(fill - radius * 2, middle - radius, radius * 2, radius * 2), radius, radius));
+            new EllipseGeometry(new Point(fill - radius, middle), radius, radius));
         dc.PushClip(reach);
         dc.DrawGeometry(Brushes.White, null, shape);
         dc.Pop();

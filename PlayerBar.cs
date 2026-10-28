@@ -6,7 +6,7 @@ namespace DynamicIsland;
 
 sealed class PlayerBar
 {
-    public readonly record struct Reading(string Text, TimeSpan Time, int Percent);
+    public readonly record struct Reading(string Text, TimeSpan? Time, int Percent);
 
     const string ClientMark = "gram";
     static readonly TimeSpan FirstRetry = TimeSpan.FromSeconds(2), LongestRetry = TimeSpan.FromSeconds(30);
@@ -114,12 +114,12 @@ sealed class PlayerBar
 
     static PropertyCondition ByClass(string name) => new(AutomationElement.ClassNameProperty, name);
 
-    static TimeSpan ParseTime(string label)
+    static TimeSpan? ParseTime(string label)
     {
         int seconds = 0;
         foreach (string part in label.Split(':'))
         {
-            if (!int.TryParse(part, out int n) || n < 0) return TimeSpan.Zero;
+            if (!int.TryParse(part, out int n) || n < 0) return null;
             seconds = seconds * 60 + n;
         }
         return TimeSpan.FromSeconds(seconds);

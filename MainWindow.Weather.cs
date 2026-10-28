@@ -24,6 +24,7 @@ public partial class MainWindow
     readonly DelayedAction _placeSearch;
     CancellationTokenSource? _searching;
     Place[] _found = [];
+    string _foundFor = "";
     IntPtr _typedAfter;
 
     bool IsTyping => _view == View.Place && IsActive;
@@ -123,7 +124,7 @@ public partial class MainWindow
     static Glyph GlyphOf(Sky sky, bool night) => sky switch
     {
         Sky.Clear => night ? Glyph.Moon : Glyph.Sun,
-        Sky.Cloudy => night ? Glyph.Cloud : Glyph.CloudSun,
+        Sky.Cloudy => night ? Glyph.CloudMoon : Glyph.CloudSun,
         Sky.Overcast => Glyph.Cloud,
         Sky.Fog => Glyph.Fog,
         Sky.Rain => Glyph.Rain,
@@ -206,7 +207,7 @@ public partial class MainWindow
     void PlaceQuery_PreviewKeyDown(object sender, KeyEventArgs e)
     {
         if (e.Key == Key.Escape) ShowPanel(Panel.Weather);
-        else if (e.Key == Key.Enter && _found.Length > 0) ChoosePlace(_found[0]);
+        else if (e.Key == Key.Enter && _found.Length > 0 && _foundFor == PlaceQuery.Text.Trim()) ChoosePlace(_found[0]);
         else return;
         e.Handled = true;
     }
@@ -231,7 +232,9 @@ public partial class MainWindow
         var searching = _searching = new CancellationTokenSource();
         try
         {
-            _found = await WeatherService.SearchAsync(PlaceQuery.Text.Trim(), searching.Token);
+            string query = PlaceQuery.Text.Trim();
+            _found = await WeatherService.SearchAsync(query, searching.Token);
+            _foundFor = query;
             PlaceStatus.Text = _found.Length == 0 ? "Ничего не нашлось" : "";
         }
         catch (OperationCanceledException) when (searching.IsCancellationRequested)

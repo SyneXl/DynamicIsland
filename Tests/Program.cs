@@ -33,6 +33,10 @@ static partial class Program
         if (args is ["--tooltip-tests", var tooltipOutput]) return ToolTipTests(tooltipOutput);
         if (args is ["--tooltip-layer-probe", var tooltipLayer]) return ToolTipLayerProbe(tooltipLayer);
         if (args is ["--tooltip-preview", var tooltipPreview]) return ToolTipPreview(tooltipPreview);
+        if (args is ["--updater-tests"]) return UpdaterTests().GetAwaiter().GetResult();
+        if (args is ["--upstream-tests", var upstreamOutput]) return UpstreamTests(upstreamOutput);
+        if (args is ["--update-handoff-tests", var updateExe, var handoffOutput]) return UpdateHandoffTests(updateExe, handoffOutput).GetAwaiter().GetResult();
+        if (args is ["--update-network-test", var downloadOutput]) return UpdateNetworkTest(downloadOutput).GetAwaiter().GetResult();
         if (args is ["--zapret-tests", var zapretOutput]) return ZapretTests(zapretOutput);
         if (args is ["--zapret-identity-tests", var identityOutput]) return ZapretIdentityTests(identityOutput);
         if (args is ["--zapret-isolation-tests", var isolationOutput]) return ZapretIsolationTests(isolationOutput);
@@ -124,8 +128,8 @@ static partial class Program
         root.Measure(new Size(root.Width, root.Height));
         root.Arrange(new Rect(0, 0, root.Width, root.Height));
         Check(window.FindName("CinemaSwitch") != null, "cinema setting exists");
-        Check(window.FindName("UpdatePage") == null && window.FindName("LoadingView") == null, "update UI removed");
-        Check(typeof(MainWindow).Assembly.GetType("DynamicIsland.Updater") == null, "updater class removed");
+        Check(window.FindName("UpdatePage") != null && window.FindName("LoadingView") != null, "own-fork update UI exists");
+        Check(Updater.Repository == "SyneXl/DynamicIsland", "updates only use the owner's fork");
 #if !MEDIA_TEST_API
         Check(typeof(MainWindow).Assembly.GetType("DynamicIsland.Testing.TestMediaSession") == null, "test media API is absent from the production assembly");
 #endif

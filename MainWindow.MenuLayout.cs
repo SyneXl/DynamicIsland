@@ -270,7 +270,6 @@ public partial class MainWindow
             View.Zapret => ZapretScroll,
             View.ZapretFolders => ZapretFoldersScroll,
             View.ZapretStrategies => ZapretStrategiesScroll,
-            View.Look when !SizeRow.IsMouseOver && !GapRow.IsMouseOver => LookScroll,
             _ => null,
         };
         if (scroll == null) return false;
@@ -287,9 +286,4 @@ public partial class MainWindow
         e.Handled = true;
     }
 
-    void LookScroll_PreviewMouseWheel(object sender, MouseWheelEventArgs e)
-    {
-        if (SizeRow.IsMouseOver || GapRow.IsMouseOver) return;
-        MenuScroll_PreviewMouseWheel(sender, e);
-    }
 }

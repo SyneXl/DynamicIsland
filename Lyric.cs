@@ -12,6 +12,8 @@ public sealed class Lyric : FrameworkElement
     const int MaxLines = 2;
     const double SweepEdge = 26;
     const double RowEdgeSlack = 0.5;
+    const double PartedRowSlack = 4;
+    const char FirstJoinedLetter = '֐', LastJoinedLetter = 'ࣿ';
 
     const int DotCount = 3;
     const double DotSize = 6, DotGap = 5, DotInset = 1;
@@ -37,6 +39,11 @@ public sealed class Lyric : FrameworkElement
     FormattedText? _text;
     double[] _rowWidths = [];
     LinearGradientBrush[] _masks = [];
+    Parting? _parting;
+    FormattedText[] _letters = [];
+    Point[] _letterOrigins = [];
+    int[] _letterRows = [];
+    bool _partMoving;
 
     public Lyric(string words)
     {
@@ -95,8 +102,56 @@ public sealed class Lyric : FrameworkElement
             _masks[i] = new LinearGradientBrush { MappingMode = BrushMappingMode.Absolute, EndPoint = new Point(Math.Max(width, 1), 0) };
             foreach (double offset in MaskOffsets) _masks[i].GradientStops.Add(new GradientStop(Colors.Black, offset));
         }
+        PrepareParting(face, width, rows);
         UpdateFill();
         return new Size(width, rows * LineHeight);
+    }
+
+    public bool Part(Point? pointer, double dt)
+    {
+        if (_parting == null) return false;
+        bool moving = _parting.Advance(pointer, dt);
+        if (moving || _partMoving) InvalidateVisual();
+        _partMoving = moving;
+        return moving;
+    }
+
+    void PrepareParting(Typeface face, double width, int rows)
+    {
+        _parting = null;
+        if (_words.Any(letter => letter is >= FirstJoinedLetter and <= LastJoinedLetter)) return;
+
+        double pixelsPerDip = VisualTreeHelper.GetDpi(this).PixelsPerDip;
+        var whole = new FormattedText(_words, CultureInfo.CurrentUICulture, FlowDirection.LeftToRight, face, FontSize, Brushes.White, pixelsPerDip)
+        {
+            MaxTextWidth = Math.Max(width, 1),
+            LineHeight = LineHeight,
+        };
+        if (whole.Height > rows * LineHeight + RowEdgeSlack) return;
+
+        int[] starts = StringInfo.ParseCombiningCharacters(_words);
+        var letters = new List<FormattedText>();
+        var origins = new List<Point>();
+        var rowsOf = new List<int>();
+        var middles = new List<Point>();
+        for (int i = 0; i < starts.Length; i++)
+        {
+            int start = starts[i], length = (i + 1 < starts.Length ? starts[i + 1] : _words.Length) - start;
+            if (char.IsWhiteSpace(_words[start]) || whole.BuildHighlightGeometry(new Point(), start, length) is not { } shape) continue;
+
+            Rect box = shape.Bounds;
+            int row = Math.Clamp((int)((box.Top + box.Height / 2) / LineHeight), 0, rows - 1);
+            letters.Add(new FormattedText(_words.Substring(start, length), CultureInfo.CurrentUICulture, FlowDirection.LeftToRight,
+                face, FontSize, Brushes.White, pixelsPerDip) { LineHeight = LineHeight });
+            origins.Add(new Point(box.Left, row * LineHeight));
+            rowsOf.Add(row);
+            middles.Add(new Point(box.Left + box.Width / 2, (row + 0.5) * LineHeight));
+        }
+        _letters = [.. letters];
+        _letterOrigins = [.. origins];
+        _letterRows = [.. rowsOf];
+        _parting = new Parting([.. middles]);
+        _partMoving = false;
     }
 
     void UpdateFill()
@@ -154,17 +209,30 @@ public sealed class Lyric : FrameworkElement
     {
         if (Unsung >= 1)
         {
+            DrawRow(dc, text, null);
+            return;
+        }
+
+        double slack = _parting == null ? 0 : PartedRowSlack;
+        for (int i = 0; i < _masks.Length; i++)
+        {
+            dc.PushClip(new RectangleGeometry(new Rect(0, i * LineHeight - slack, ActualWidth, LineHeight + 2 * slack)));
+            dc.PushOpacityMask(_masks[i]);
+            DrawRow(dc, text, i);
+            dc.Pop();
+            dc.Pop();
+        }
+    }
+
+    void DrawRow(DrawingContext dc, FormattedText text, int? row)
+    {
+        if (_parting == null)
+        {
             dc.DrawText(text, new Point());
             return;
         }
 
-        for (int i = 0; i < _masks.Length; i++)
-        {
-            dc.PushClip(new RectangleGeometry(new Rect(0, i * LineHeight, ActualWidth, LineHeight)));
-            dc.PushOpacityMask(_masks[i]);
-            dc.DrawText(text, new Point());
-            dc.Pop();
-            dc.Pop();
-        }
+        for (int i = 0; i < _letters.Length; i++)
+            if (row == null || _letterRows[i] == row) dc.DrawText(_letters[i], _letterOrigins[i] + _parting[i]);
     }
 }

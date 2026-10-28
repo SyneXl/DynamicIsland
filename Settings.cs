@@ -59,6 +59,7 @@ static class Settings
     static bool _weather = ReadSwitch(nameof(Weather));
     static bool _cinema = ReadSwitch(nameof(Cinema));
     static bool _codexAutoPing = ReadSwitch(nameof(CodexAutoPing), false);
+    static bool _lyricParting = ReadSwitch(nameof(LyricParting));
     static Place? _place = ReadPlace();
     static bool _dots = ReadSwitch(nameof(Dots), false);
     static bool _lineBar = ReadSwitch(nameof(LineBar));
@@ -148,6 +149,12 @@ static class Settings
     {
         get => _lyricEffects;
         set => Write(nameof(LyricEffects), _lyricEffects = value);
+    }
+
+    public static bool LyricParting
+    {
+        get => _lyricParting;
+        set => Write(nameof(LyricParting), _lyricParting = value);
     }
 
     public static bool Rim

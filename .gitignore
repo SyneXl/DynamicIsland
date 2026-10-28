@@ -29,3 +29,13 @@ artifacts/
 *.old
 *.new
 
+# Never publish local credentials, logs or signing material
+.env
+.env.*
+auth.json
+.codex/
+*.log
+*.pfx
+*.key
+*.pem
+

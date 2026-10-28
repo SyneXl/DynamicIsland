@@ -113,7 +113,7 @@ public sealed class Toggle : FrameworkElement
         EndDrag();
         _row!.ReleaseMouseCapture();
         if (on != _on) _row.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent, _row));
-        else Set(_on, true);
+        Set(_on, true);
     }
 
     void OnRowLostCapture(object sender, MouseEventArgs e)

@@ -95,7 +95,7 @@ sealed partial class LyricsService
             if (!stamped.Success) return true;
 
             string text = stamped.Groups[2].Value.Trim();
-            return !Credit.IsMatch(text) && !(text.Contains(TitleSeparator) && Plain(text).StartsWith(heading, StringComparison.Ordinal));
+            return !Credit.IsMatch(text) && !(heading.Length > 0 && text.Contains(TitleSeparator) && Plain(text).StartsWith(heading, StringComparison.Ordinal));
         }));
     }
 

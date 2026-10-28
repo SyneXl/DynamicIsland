@@ -38,6 +38,7 @@ public partial class MainWindow
     {
         _hovered = _pressed = false;
         UpdateView();
+        StirLyrics();
         UpdateTargets();
         if (_panel != Panel.None) _collapseTimeout.Start(CollapseDelay);
     }
@@ -57,6 +58,7 @@ public partial class MainWindow
 
     void Root_MouseMove(object sender, MouseEventArgs e)
     {
+        StirLyrics();
         if (_grab == Grab.None) return;
         Point at = e.GetPosition(this);
         double now = _clock.Elapsed.TotalSeconds, dt = now - _pointerAt;
@@ -127,6 +129,7 @@ public partial class MainWindow
             return;
         }
         if (_ringing || _panel != Panel.None) SelectPanel(Panel.None);
+        else if (_updater.State == Updater.Stage.Loading) SelectPanel(Panel.Update);
         else SelectPanel(ShowMediaPage || _media.HomeSelected ? Panel.Player : _obs.Recording ? Panel.Record : _countdown.IsActive ? Panel.Timer : Panel.Player);
         UpdateView();
     }
@@ -201,7 +204,9 @@ public partial class MainWindow
         else if (_view == View.TimerSet) SetMinutes(_setupMinutes + step);
         else if (_view == View.Look && SizeRow.IsMouseOver) SetScale(Settings.Scale + step * ScaleStep);
         else if (_view == View.Look && GapRow.IsMouseOver) SetGap(Settings.Gap + step * GapStep);
+        else if (_view == View.Look) ScrollLook(-step);
         else if (_view == View.Shelf && ShelfOverflow > 0) ScrollShelf(-step);
+        else if (_view == View.Update) ScrollUpdateNotes(-step);
         else if (_view == View.MediaBig && Settings.AppVolume && _audio.AdjustAppVolume(_media.Source, step * WheelVolumeStep, out float level))
             ShowPlayerVolume(level, false, true);
         else if (IsVolumeAtLimit(up)) OvershootVolume(up);

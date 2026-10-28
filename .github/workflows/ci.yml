@@ -1,0 +1,27 @@
+name: Build and regressions
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: 8.0.x
+      - name: Core and UI regressions
+        run: dotnet run --project Tests/DynamicIsland.Tests.csproj -c Release
+      - name: Update verification and failure controls
+        run: dotnet run --project Tests/DynamicIsland.Tests.csproj -c Release --no-build -- --updater-tests
+      - name: Upstream integration
+        run: dotnet run --project Tests/DynamicIsland.Tests.csproj -c Release --no-build -- --upstream-tests artifacts/ui
+      - name: Media switching and late-request isolation
+        run: dotnet run --project Tests/DynamicIsland.Tests.csproj -c Release -p:MediaTestApi=true -- --media-regressions

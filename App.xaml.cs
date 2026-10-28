@@ -15,6 +15,12 @@ public partial class App : Application
 
     protected override async void OnStartup(StartupEventArgs e)
     {
+        if (e.Args is ["--apply-update", var manifest])
+        {
+            ShutdownMode = ShutdownMode.OnExplicitShutdown;
+            Shutdown(await UpdateHandoff.RunAsync(manifest));
+            return;
+        }
         if (e.Args is ["--zapret-operation", var operationFolder])
         {
             ShutdownMode = ShutdownMode.OnExplicitShutdown;
@@ -22,11 +28,14 @@ public partial class App : Application
             Shutdown(exitCode);
             return;
         }
-        SmokeTest = e.Args is ["--smoke-test", _];
+        int smoke = Array.IndexOf(e.Args, "--smoke-test");
+        int updated = Array.IndexOf(e.Args, "--updated");
+        string? readyPath = updated >= 0 && updated + 1 < e.Args.Length ? e.Args[updated + 1] : null;
+        SmokeTest = smoke >= 0 && smoke + 1 < e.Args.Length;
         if (SmokeTest)
         {
             base.OnStartup(e);
-            string result = Path.GetFullPath(e.Args[1]);
+            string result = Path.GetFullPath(e.Args[smoke + 1]);
             DispatcherUnhandledException += (_, args) =>
             {
                 File.WriteAllText(result, args.Exception.ToString());
@@ -45,14 +54,20 @@ public partial class App : Application
                     && window.FindName("CodexAutoSwitch") != null
                     && window.FindName("MenuLayoutView") is FrameworkElement { Height: > 0 }
                     && window.FindName("MenuLayoutRow") != null
+                    && window.FindName("UpdatePage") != null
+                    && window.FindName("LoadingView") != null
+                    && window.FindName("LyricsPage") != null
+                    && window.FindName("HeadsetGadget") != null
                     && window.FindName("ZapretView") is FrameworkElement { Height: > 0 }
                     && window.FindName("ZapretFolderRows") != null
                     && window.FindName("ZapretStrategyRows") != null;
-                File.WriteAllText(result, JsonSerializer.Serialize(new { ready, ui = "WPF", externalServices = false }));
+                File.WriteAllText(result, JsonSerializer.Serialize(new { ready, ui = "WPF", externalServices = false,
+                    version = Updater.CurrentVersion.ToString(), updateRepository = Updater.Repository }));
                 window.Close();
                 Shutdown(ready ? 0 : 1);
             };
             window.Show();
+            if (readyPath != null) _ = Dispatcher.InvokeAsync(() => UpdateHandoff.Acknowledge(readyPath), DispatcherPriority.ApplicationIdle);
             timer.Start();
             return;
         }
@@ -70,6 +85,8 @@ public partial class App : Application
             args.Handled = true;
         };
         new MainWindow().Show();
+        if (readyPath != null) _ = Dispatcher.InvokeAsync(() => UpdateHandoff.Acknowledge(readyPath), DispatcherPriority.ApplicationIdle);
+        _ = UpdateHandoff.CleanCompletedAsync();
     }
 
     public static void Log(Exception ex)

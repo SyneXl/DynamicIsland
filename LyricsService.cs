@@ -238,8 +238,7 @@ sealed partial class LyricsService
                 lines.Add(new Line(TimeSpan.FromSeconds(minutes * 60 + rest), text));
             }
         }
-        lines.Sort((a, b) => a.Time.CompareTo(b.Time));
-        return lines.ToArray();
+        return lines.OrderBy(line => line.Time).ToArray();
     }
 
     static HttpClient CreateClient()

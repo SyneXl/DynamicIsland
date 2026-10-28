@@ -41,6 +41,19 @@ sealed class FrameLoop
         if (elapsed <= 0 || elapsed < ShortestStep) return;
 
         _last = now;
-        if (!_advance(Math.Min(elapsed, LongestStep))) Stop();
+        if (!AdvanceSafely(Math.Min(elapsed, LongestStep))) Stop();
+    }
+
+    bool AdvanceSafely(double dt)
+    {
+        try
+        {
+            return _advance(dt);
+        }
+        catch (Exception ex)
+        {
+            App.Log(ex);
+            return false;
+        }
     }
 }

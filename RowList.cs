@@ -43,6 +43,12 @@ public sealed class RowList : StackPanel
         dc.DrawGeometry(_fill, null, _shape);
     }
 
+    public void FollowPointer()
+    {
+        Mouse.Synchronize();
+        UpdateHighlight();
+    }
+
     void UpdateHighlight()
     {
         ButtonBase? row = InternalChildren.OfType<ButtonBase>().FirstOrDefault(button => button.IsMouseOver);
