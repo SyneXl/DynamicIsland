@@ -13,9 +13,9 @@ namespace DynamicIsland;
 
 public partial class MainWindow : Window
 {
-    enum View { Idle, Media, Timer, Record, Volume, Charge, Focus, Toast, Notice, MediaBig, IdleBig, TimerBig, TimerSet, RecordBig, RecordSet, Menu, Settings, Look, Shelf, Weather, Place, Qr, Update, Sources, Loading }
+    enum View { Idle, Media, CinemaMedia, Timer, Record, Volume, Charge, Focus, Toast, Notice, MediaBig, IdleBig, TimerBig, TimerSet, RecordBig, RecordSet, Menu, Settings, Look, Shelf, Weather, Place, Qr, Sources, Codex, MenuLayout, Zapret, ZapretFolders, ZapretStrategies }
 
-    enum Panel { None, Player, Timer, TimerSet, Record, Menu, Settings, Look, Shelf, Weather, Place, Qr, Update, Sources }
+    enum Panel { None, Player, Timer, TimerSet, Record, Menu, Settings, Look, Shelf, Weather, Place, Qr, Sources, Codex, MenuLayout, Zapret, ZapretFolders, ZapretStrategies }
 
     readonly record struct PillShape(double Width, double Height, double Radius);
 
@@ -23,6 +23,7 @@ public partial class MainWindow : Window
     {
         [View.Idle] = new(118, 34, 17),
         [View.Media] = new(210, 34, 17),
+        [View.CinemaMedia] = new(96, 34, 17),
         [View.Timer] = new(132, 34, 17),
         [View.Record] = new(132, 34, 17),
         [View.Volume] = new(250, 34, 17),
@@ -36,16 +37,19 @@ public partial class MainWindow : Window
         [View.TimerSet] = new(300, 190, 38),
         [View.RecordBig] = new(340, 92, 40),
         [View.RecordSet] = new(320, 92, 40),
-        [View.Menu] = new(300, 368, 34),
+        [View.Menu] = new(300, 408, 34),
+        [View.Codex] = new(320, 304, 34),
         [View.Settings] = new(320, 454, 34),
         [View.Look] = new(352, LookHeight, 34),
+        [View.MenuLayout] = new(380, 408, 34),
+        [View.Zapret] = new(360, 284, 34),
+        [View.ZapretFolders] = new(420, 466, 34),
+        [View.ZapretStrategies] = new(380, 432, 34),
         [View.Shelf] = new(380, 136, 34),
         [View.Weather] = new(340, 190, 34),
         [View.Place] = new(320, 200, 34),
         [View.Qr] = new(320, 104, 34),
-        [View.Update] = new(320, 150, 34),
         [View.Sources] = new(320, 294, 34),
-        [View.Loading] = new(118, 34, 17),
     };
 
     readonly record struct MediaSpot(
@@ -58,13 +62,14 @@ public partial class MainWindow : Window
     static readonly Dictionary<View, MediaSpot> MediaSpots = new()
     {
         [View.Media] = new(7, 6, 22, 13, 17, 21, 16, 0),
+        [View.CinemaMedia] = new(12, 7, 20, 12, 17, 24, 11, 0),
         [View.Toast] = new(12, 12, 44, 20, 34, 23, 20, 0),
         [View.MediaBig] = new(20, 20, 64, 22, 52, 38, 26, 1),
     };
 
-    static readonly View[] MenuPages = [View.Settings, View.Look, View.TimerSet, View.TimerBig, View.RecordSet, View.RecordBig, View.Shelf, View.Weather, View.Qr];
+    static readonly View[] MenuPages = [View.Settings, View.Look, View.TimerSet, View.TimerBig, View.RecordSet, View.RecordBig, View.Shelf, View.Weather, View.Qr, View.Codex, View.Zapret];
 
-    static readonly View[] SettingsPages = [View.Update, View.Sources];
+    static readonly View[] SettingsPages = [View.Sources];
 
     static readonly View[] WeatherPages = [View.Place];
 
@@ -85,7 +90,7 @@ public partial class MainWindow : Window
     readonly MediaService _media;
     readonly LyricsService _lyrics = new();
     readonly NetworkService _network;
-    readonly Updater _updater = new();
+    readonly IslandToolTips _toolTips;
     readonly Stopwatch _clock = Stopwatch.StartNew();
     readonly DispatcherTimer _ticker = new() { Interval = TickInterval };
     readonly DelayedAction _transientTimeout, _collapseTimeout, _awayTimeout;
@@ -101,7 +106,9 @@ public partial class MainWindow : Window
 
     public MainWindow()
     {
+        IslandToolTips.Initialize();
         InitializeComponent();
+        _toolTips = new IslandToolTips(this);
         Width *= LargestScale / 100.0;
         Height = Height * LargestScale / 100.0 + LargestGap;
 
@@ -115,6 +122,7 @@ public partial class MainWindow : Window
         {
             [View.Idle] = IdleView,
             [View.Media] = MediaView,
+            [View.CinemaMedia] = CinemaMediaView,
             [View.Timer] = TimerView,
             [View.Record] = RecordView,
             [View.Volume] = VolumeView,
@@ -131,13 +139,16 @@ public partial class MainWindow : Window
             [View.Menu] = MenuView,
             [View.Settings] = SettingsView,
             [View.Look] = LookView,
+            [View.MenuLayout] = MenuLayoutView,
+            [View.Zapret] = ZapretView,
+            [View.ZapretFolders] = ZapretFoldersView,
+            [View.ZapretStrategies] = ZapretStrategiesView,
             [View.Shelf] = ShelfView,
             [View.Weather] = WeatherView,
             [View.Place] = PlaceView,
             [View.Qr] = QrView,
-            [View.Update] = UpdatePage,
             [View.Sources] = SourcesView,
-            [View.Loading] = LoadingView,
+            [View.Codex] = CodexView,
         };
         _spotSprings = [_coverLeft, _coverTop, _coverSize, _barsRight, _barsCenterY, _barsWidth, _barsHeight, _barsOpen];
         _springs =
@@ -165,18 +176,25 @@ public partial class MainWindow : Window
 
         _media = new MediaService(Dispatcher);
         _media.Changed += OnMediaChanged;
+        Closed += (_, _) => _media.Dispose();
         _lyrics.Changed += OnLyricsChanged;
         _network = new NetworkService(Dispatcher);
         _network.Changed += OnNetworkChanged;
-        _updater.Changed += RefreshUpdatePage;
+        _fullscreenVideo = new FullscreenVideoService(Dispatcher, _media.IsVideoForProcessAsync);
+        _fullscreenVideo.Changed += OnFullscreenVideoChanged;
+        Closed += (_, _) => _fullscreenVideo.Dispose();
         _shelf = new Shelf(Dispatcher);
         _shelf.Changed += SyncShelf;
         _shelf.PictureLoaded += OnShelfPictureLoaded;
         _obs.Changed += OnObsChanged;
         _obs.Saved += OnRecordingSaved;
         _weather.Changed += SyncWeather;
+        _codex.Changed += () => Dispatcher.InvokeAsync(() => { if (IsLoaded) SyncCodex(); });
+        Closed += (_, _) => _codex.Dispose();
 
         PrepareViews();
+        PrepareMenuLayout();
+        PrepareZapret();
         PrepareWeatherHours();
         ApplyTimerTint();
         ApplyRecordTint();
@@ -214,6 +232,7 @@ public partial class MainWindow : Window
     }
 
     bool IsMediaActive => _media.HasTrack && (_media.IsPlaying || DateTime.UtcNow - _lastPlayedAt < PausedMediaLinger);
+    bool ShowMediaPage => !_media.HomeSelected && (_media.IsLoading || _media.HasTrack && (IsMediaActive || _media.HasSelectedSession));
 
     protected override void OnSourceInitialized(EventArgs e)
     {
@@ -267,16 +286,19 @@ public partial class MainWindow : Window
         UpdateClock();
         UpdateSwitches(false);
         RefreshLookPage();
-        RefreshUpdatePage();
         SyncAccent(false);
         SyncShelf();
         SyncRecord();
         SyncWeather();
+        SyncCodex();
         SyncGlass(false);
         PlayIntro();
+        // Build verification opens a real HWND without starting external services
+        // or competing with the user's already-running instance.
+        if (App.SmokeTest) return;
+        _codex.SetEnabled(Settings.CodexAutoPing);
         _ticker.Start();
         if (_forcedTimerSeconds > 0) StartTimer(TimeSpan.FromSeconds(_forcedTimerSeconds));
-        if (_forcedView == View.Update) _ = _updater.CheckAsync();
 
         try { await _media.StartAsync(); }
         catch (Exception ex) { App.Log(ex); }
@@ -313,6 +335,13 @@ public partial class MainWindow : Window
         StartShapeLoop();
     }
 
+    void KeepIslandOnTop()
+    {
+        Native.KeepOnTop(_hwnd);
+        _glass.Place();
+        _toolTips.Raise();
+    }
+
     void TickSafely()
     {
         try
@@ -341,10 +370,12 @@ public partial class MainWindow : Window
         if (_ticks % ClockUpdateTicks == 0)
         {
             UpdateClock();
+            if (_view == View.Codex) SyncCodex();
+            if ((_view is View.Zapret or View.ZapretFolders or View.ZapretStrategies || _view == View.Menu && _menuButtons["zapret"].Visibility == Visibility.Visible)
+                && !_zapretBusy && Environment.TickCount64 - _zapretStatusAt > 2000) _ = RefreshZapretAsync();
             PollPower();
             _ = _weather.RefreshAsync();
-            Native.KeepOnTop(_hwnd);
-            _glass.Place();
+            KeepIslandOnTop();
             if (_media.IsPlaying) _lastPlayedAt = DateTime.UtcNow;
             UpdateView();
         }
@@ -357,8 +388,12 @@ public partial class MainWindow : Window
             Panel.Menu => View.Menu,
             Panel.Settings => View.Settings,
             Panel.Look => View.Look,
-            Panel.Update => View.Update,
+            Panel.MenuLayout => View.MenuLayout,
+            Panel.Zapret => View.Zapret,
+            Panel.ZapretFolders => View.ZapretFolders,
+            Panel.ZapretStrategies => View.ZapretStrategies,
             Panel.Sources => View.Sources,
+            Panel.Codex => View.Codex,
             Panel.Shelf => View.Shelf,
             Panel.Weather => View.Weather,
             Panel.Place => View.Place,
@@ -366,15 +401,16 @@ public partial class MainWindow : Window
             Panel.TimerSet => View.TimerSet,
             Panel.Record => _obs.Recording ? View.RecordBig : View.RecordSet,
             Panel.Timer when _countdown.IsActive => View.TimerBig,
-            Panel.Timer or Panel.Player => _media.HasTrack ? View.MediaBig : View.IdleBig,
-            _ => _transientView ?? (_updater.State == Updater.Stage.Loading ? View.Loading
-                : IsMediaActive ? View.Media : _obs.Recording ? View.Record : _countdown.IsActive ? View.Timer : View.Idle),
+            Panel.Timer or Panel.Player => !_media.HomeSelected && (_media.HasTrack || _media.IsLoading) ? View.MediaBig : View.IdleBig,
+            _ => _transientView ?? (ShowMediaPage ? (_cinemaDimmed ? View.CinemaMedia : View.Media)
+                : _media.HomeSelected ? View.Idle : _obs.Recording ? View.Record : _countdown.IsActive ? View.Timer : View.Idle),
         };
         return target == View.Toast && !_media.HasTrack ? View.Idle : target;
     }
 
     void UpdateView()
     {
+        SyncCinemaAppearance();
         View target = TargetView();
         bool changed = target != _view;
         if (changed) MorphTo(target);
@@ -382,6 +418,7 @@ public partial class MainWindow : Window
         SyncEq();
         SyncRim();
         SyncCover();
+        SyncNavigation();
         if (!changed) return;
         if (target == View.MediaBig) StartSeekLoop();
         if (target == View.Media) UpdateLyric(true);
@@ -389,6 +426,7 @@ public partial class MainWindow : Window
 
     void MorphTo(View target)
     {
+        _toolTips.Dismiss();
         View previous = _view;
         PillShape from = ShapeOf(previous);
         _view = target;
@@ -401,7 +439,7 @@ public partial class MainWindow : Window
         foreach (Spring spring in _spotSprings) spring.Tune(_height.Stiffness, _height.Damping);
 
         _morphing = true;
-        SwitchView(_views[target], MenuDirection(previous, target));
+        SwitchView(_views[target], _pageDirection != 0 ? _pageDirection : MenuDirection(previous, target));
         if (target == View.Place) BeginTyping();
         else if (previous == View.Place) EndTyping();
         MoveMediaSpot(previous, target, to);
@@ -436,24 +474,37 @@ public partial class MainWindow : Window
 
     static bool IsPageOf(View parent, View page) =>
         parent == View.Menu && MenuPages.Contains(page) || parent == View.Settings && SettingsPages.Contains(page)
-        || parent == View.Weather && WeatherPages.Contains(page);
+        || parent == View.Weather && WeatherPages.Contains(page)
+        || parent == View.Look && page == View.MenuLayout
+        || parent == View.Zapret && page is View.ZapretFolders or View.ZapretStrategies;
 
     PillShape ShapeOf(View view) => view switch
     {
+        View.Idle => PillShapes[view] with { Width = CompactHomeWidth },
         View.Media => PillShapes[view] with { Width = _compactMediaWidth },
         View.MediaBig when _playerHasLyricRoom => PillShapes[view] with { Height = PlayerHeight + PlayerLyricsHeight },
         View.RecordSet => PillShapes[view] with { Width = RecordSetView.Width },
-        View.Update => PillShapes[view] with { Height = UpdatePage.Height },
         View.Weather => PillShapes[view] with { Height = WeatherView.Height },
         View.Place => PillShapes[view] with { Height = PlaceView.Height },
         View.Look => PillShapes[view] with { Height = LookView.Height },
+        View.Menu => PillShapes[view] with { Height = MenuView.Height },
+        View.MenuLayout => PillShapes[view] with { Height = MenuLayoutView.Height },
+        View.Zapret => PillShapes[view] with { Height = ZapretView.Height },
+        View.Codex => PillShapes[view] with { Height = CodexView.Height },
         _ => PillShapes[view],
     };
 
     void ShowTransient(View view, double seconds, bool force = false)
     {
-        if (force) _panel = Panel.None;
-        else if (_panel != Panel.None || _hiddenByFullscreen || _sentAway) return;
+        if (force)
+        {
+            EndMenuReorder(false);
+            CancelGrab();
+            CancelScrub();
+            _collapseTimeout.Cancel();
+            _panel = Panel.None;
+        }
+        else if (_ringing || _panel != Panel.None || _hiddenByFullscreen || _sentAway || (_media.HomeSelected && view == View.Toast) || (_cinemaMode && !_hovered && !_bubbleHovered)) return;
         _transientView = view;
         _transientTimeout.Start(TimeSpan.FromSeconds(seconds));
         UpdateView();
@@ -468,6 +519,8 @@ public partial class MainWindow : Window
 
     void SelectPanel(Panel panel)
     {
+        if (panel != Panel.MenuLayout) EndMenuReorder(false);
+        if (panel != Panel.Player) CancelScrub();
         _panel = panel;
         _transientView = null;
         _transientTimeout.Cancel();
@@ -476,13 +529,14 @@ public partial class MainWindow : Window
 
     void ShowPanel(Panel panel)
     {
-        _panel = panel;
+        SelectPanel(panel);
         UpdateView();
     }
 
     void Collapse()
     {
-        if (_hovered || _pickingFiles || IsTyping) return;
+        if (_ringing || _hovered || _pickingFiles || IsTyping || _menuDragId != null || _zapretBusy
+            || _view == View.MenuLayout && IsActive && MenuLayoutView.IsKeyboardFocusWithin) return;
         ShowPanel(Panel.None);
     }
 

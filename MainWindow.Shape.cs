@@ -40,6 +40,7 @@ public partial class MainWindow
 
     void UpdateTargets()
     {
+        SyncCinemaAppearance();
         PillShape shape = ShapeOf(_view);
         bool compact = shape.Height < CompactMaxHeight;
         double pull = RubberBand(_pull, MaxPull), lean = Math.Sign(_leanDrag) * RubberBand(Math.Abs(_leanDrag), MaxLean);
@@ -124,7 +125,7 @@ public partial class MainWindow
         Pill.Width = w;
         Pill.Height = h;
         Pill.CornerRadius = new CornerRadius(r);
-        Shadow.Opacity = Math.Clamp((h - CompactMaxHeight) / ShadowFadeHeight, 0, 1);
+        Shadow.Opacity = _cinemaDimmed ? 0 : Math.Clamp((h - CompactMaxHeight) / ShadowFadeHeight, 0, 1);
         if (pill != _clipRect || r != _clipRadius)
         {
             _clipRect = pill;
@@ -146,6 +147,7 @@ public partial class MainWindow
         SharpenLyricCache(dpi);
 
         PlaceCoverAndBars(pill);
+        PlaceNavigation(pill);
         PlaceBubble(pill, r, scale);
         CutGlass(dpi);
     }
@@ -192,17 +194,18 @@ public partial class MainWindow
 
     void SyncGlass(bool animate)
     {
-        if (Settings.Glass)
+        if (Settings.Glass && !_cinemaDimmed)
         {
             _glass.Show();
             Reshape();
         }
-        Body.Thin(Settings.Glass, animate ? GlassTime : TimeSpan.Zero, HideGlassOnceCovered);
+        if (_cinemaDimmed) _glass.Hide();
+        Body.Thin(Settings.Glass && !_cinemaDimmed, animate ? GlassTime : TimeSpan.Zero, HideGlassOnceCovered);
     }
 
     void HideGlassOnceCovered()
     {
-        if (Settings.Glass || !_glass.IsOn) return;
+        if (Settings.Glass && !_cinemaDimmed || !_glass.IsOn) return;
         _glass.Hide();
         Reshape();
     }
@@ -238,7 +241,7 @@ public partial class MainWindow
         double tuck = Math.Max(r - Bubble.Height / 2, 0) * BubbleTuckFactor * (1 - Math.Clamp(split, 0, 1)) * scale;
         BubbleMove.X = (pill.Width * scale - wide) / 2 + (BubbleGap + wide) * split - tuck;
         BubbleScale.ScaleX = BubbleScale.ScaleY = bubble;
-        BubbleBody.Opacity = Math.Clamp(split * 4 - 3, 0, 1);
+        BubbleBody.Opacity = Math.Clamp(split * 4 - 3, 0, 1) * (_cinemaDimmed ? 0.48 : 1);
         Bubble.IsHitTestVisible = split > BubbleClickableSplit;
 
         double past = ((BubbleGap + wide) * split - wide - tuck) / scale;

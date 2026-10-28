@@ -1,5 +1,7 @@
 using System.IO;
+using System.Text.Json;
 using System.Windows;
+using System.Windows.Threading;
 
 namespace DynamicIsland;
 
@@ -7,20 +9,59 @@ public partial class App : Application
 {
     const string InstanceName = "DynamicIsland.SingleInstance";
     const string LogFileName = "DynamicIsland.log";
-    static readonly TimeSpan PredecessorExitTimeout = TimeSpan.FromSeconds(10);
 
     Mutex? _mutex;
+    internal static bool SmokeTest { get; private set; }
 
-    protected override void OnStartup(StartupEventArgs e)
+    protected override async void OnStartup(StartupEventArgs e)
     {
+        if (e.Args is ["--zapret-operation", var operationFolder])
+        {
+            ShutdownMode = ShutdownMode.OnExplicitShutdown;
+            int exitCode = await ZapretElevation.RunHelperAsync(operationFolder);
+            Shutdown(exitCode);
+            return;
+        }
+        SmokeTest = e.Args is ["--smoke-test", _];
+        if (SmokeTest)
+        {
+            base.OnStartup(e);
+            string result = Path.GetFullPath(e.Args[1]);
+            DispatcherUnhandledException += (_, args) =>
+            {
+                File.WriteAllText(result, args.Exception.ToString());
+                args.Handled = true;
+                Shutdown(1);
+            };
+            var window = new MainWindow();
+            var timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(900) };
+            timer.Tick += (_, _) =>
+            {
+                timer.Stop();
+                bool ready = window.IsLoaded && window.IsVisible
+                    && window.FindName("Root") is FrameworkElement { ActualWidth: > 0 }
+                    && window.FindName("CinemaSwitch") != null
+                    && window.FindName("CodexView") != null
+                    && window.FindName("CodexAutoSwitch") != null
+                    && window.FindName("MenuLayoutView") is FrameworkElement { Height: > 0 }
+                    && window.FindName("MenuLayoutRow") != null
+                    && window.FindName("ZapretView") is FrameworkElement { Height: > 0 }
+                    && window.FindName("ZapretFolderRows") != null
+                    && window.FindName("ZapretStrategyRows") != null;
+                File.WriteAllText(result, JsonSerializer.Serialize(new { ready, ui = "WPF", externalServices = false }));
+                window.Close();
+                Shutdown(ready ? 0 : 1);
+            };
+            window.Show();
+            timer.Start();
+            return;
+        }
         _mutex = new Mutex(true, InstanceName, out bool isOnlyInstance);
-        if (!isOnlyInstance && e.Args.Contains(Updater.RestartedFlag)) isOnlyInstance = WaitForPredecessor(_mutex);
         if (!isOnlyInstance)
         {
             Shutdown();
             return;
         }
-        Updater.CleanUp();
 
         base.OnStartup(e);
         DispatcherUnhandledException += (_, args) =>
@@ -41,9 +82,4 @@ public partial class App : Application
         catch { }
     }
 
-    static bool WaitForPredecessor(Mutex mutex)
-    {
-        try { return mutex.WaitOne(PredecessorExitTimeout); }
-        catch (AbandonedMutexException) { return true; }
-    }
 }

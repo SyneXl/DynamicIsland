@@ -30,7 +30,9 @@ public sealed class Goo : FrameworkElement
 
     public void Tint(Color? color, Duration time)
     {
-        Color to = color is { } c ? Color.FromArgb(TintedAlpha, c.R, c.G, c.B) : PlainRim;
+        Color to = color is { } c
+            ? c.A == 0 ? Colors.Transparent : Color.FromArgb(TintedAlpha, c.R, c.G, c.B)
+            : PlainRim;
         _rim.BeginAnimation(SolidColorBrush.ColorProperty, new ColorAnimation(to, time));
     }
 

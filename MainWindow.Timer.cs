@@ -90,14 +90,14 @@ public partial class MainWindow
         TimerText.Text = BubbleText.Text = BigTimer.Text = MenuTimer.Text = $"{seconds / 60}:{seconds % 60:00}";
 
         SetUrgent(seconds <= UrgentSeconds);
-        if (_urgent && _countdown.IsRunning) PulseTimer();
+        if (_urgent && _countdown.IsRunning && !_cinemaDimmed) PulseTimer();
     }
 
     void SetUrgent(bool on)
     {
         if (on == _urgent) return;
         _urgent = on;
-        _timerTint.BeginAnimation(SolidColorBrush.ColorProperty, new ColorAnimation((on ? _red : _orange).Color, Ms(300)));
+        _timerTint.BeginAnimation(SolidColorBrush.ColorProperty, new ColorAnimation(_cinemaDimmed ? QuietTimerColor : (on ? _red : _orange).Color, Ms(300)));
     }
 
     void PulseTimer()

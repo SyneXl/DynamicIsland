@@ -85,7 +85,7 @@ public partial class MainWindow
         TimeSpan at = LyricTime;
         int index = LineAt(lines, at);
 
-        string title = _media.HasTrack ? _media.Name : "";
+        string title = _media.IsLoading ? "Загрузка…" : _media.HasTrack ? _media.Name : "";
         string text = index < 0 ? "" : lines[index].Text;
         TimeSpan end = index + 1 < lines.Length ? lines[index + 1].Time : _media.Duration;
         double seconds = (end - at).TotalSeconds;

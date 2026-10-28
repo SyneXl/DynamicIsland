@@ -18,6 +18,7 @@ public partial class MainWindow
     readonly Spring _seekFill = new(0, 170, 26), _seekHeight = new(SeekHeight, 420, 26);
     readonly FrameLoop _seekLoop;
     bool _scrubbing;
+    long _scrubContext = -1, _seekContext = -1;
     double _scrubFraction, _scrubHeldUntil;
     (int At, int Total) _seekLabel = (NoSeconds, NoSeconds);
     LyricsService.Line[] _seekLinesFrom = [];
@@ -32,6 +33,7 @@ public partial class MainWindow
 
     bool AdvanceSeek(double dt)
     {
+        SyncSeekContext();
         if (_view != View.MediaBig && !_scrubbing) return false;
 
         double now = _clock.Elapsed.TotalSeconds;
@@ -103,13 +105,14 @@ public partial class MainWindow
     void Seek_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
     {
         e.Handled = true;
-        if (SeekArea.ActualWidth <= 0 || !_media.Seekable) return;
+        if (SeekArea.ActualWidth <= 0 || !_media.Seekable || !_media.CanControl) return;
 
+        _scrubContext = _media.CaptureContext();
         _scrubbing = true;
         _scrubFraction = SeekFraction(e);
         _seekFill.Tune(900, 60);
         PosText.Foreground = RemText.Foreground = Brushes.White;
-        SeekArea.CaptureMouse();
+        if (!SeekArea.CaptureMouse()) CancelScrub();
     }
 
     void Seek_MouseMove(object sender, MouseEventArgs e)
@@ -122,15 +125,19 @@ public partial class MainWindow
         e.Handled = true;
         if (!_scrubbing) return;
 
+        long context = _scrubContext;
         EndScrub();
-        _scrubHeldUntil = _clock.Elapsed.TotalSeconds + SeekHoldSeconds;
-        _media.Seek(_scrubFraction);
+        if (_media.IsCurrentContext(context))
+        {
+            _scrubHeldUntil = _clock.Elapsed.TotalSeconds + SeekHoldSeconds;
+            _media.Seek(_scrubFraction, context);
+        }
         SeekArea.ReleaseMouseCapture();
     }
 
     void Seek_LostMouseCapture(object sender, MouseEventArgs e)
     {
-        if (_scrubbing) EndScrub();
+        CancelScrub();
     }
 
     void EndScrub()
@@ -138,5 +145,23 @@ public partial class MainWindow
         _scrubbing = false;
         _seekFill.Tune(170, 26);
         PosText.Foreground = RemText.Foreground = _dim;
+    }
+
+    void SyncSeekContext()
+    {
+        long context = _media.ContextVersion;
+        if (context == _seekContext) return;
+        _seekContext = context;
+        _scrubHeldUntil = 0;
+        _seekLabel = (NoSeconds, NoSeconds);
+        CancelScrub();
+    }
+
+    void CancelScrub()
+    {
+        if (!_scrubbing) return;
+        EndScrub();
+        _scrubHeldUntil = 0;
+        SeekArea.ReleaseMouseCapture();
     }
 }

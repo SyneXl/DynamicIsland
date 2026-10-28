@@ -22,6 +22,11 @@ public sealed class Equalizer : FrameworkElement
     public static readonly DependencyProperty FillProperty = DependencyProperty.Register(
         nameof(Fill), typeof(SolidColorBrush), typeof(Equalizer),
         new FrameworkPropertyMetadata(Brushes.White, FrameworkPropertyMetadataOptions.AffectsRender));
+    public static readonly DependencyProperty QuietProperty = DependencyProperty.Register(
+        nameof(Quiet), typeof(bool), typeof(Equalizer),
+        new FrameworkPropertyMetadata(false, FrameworkPropertyMetadataOptions.AffectsRender));
+
+    public bool Quiet { get => (bool)GetValue(QuietProperty); set => SetValue(QuietProperty, value); }
 
     readonly Shades _shades = new();
 
@@ -91,7 +96,8 @@ public sealed class Equalizer : FrameworkElement
         else if (spectrum != null) FollowSpectrum(spectrum, dt);
         else FollowPeak(peak, t);
 
-        double rise = 1 - Math.Exp(-dt / AttackSeconds), fall = 1 - Math.Exp(-dt / ReleaseSeconds);
+        double rise = 1 - Math.Exp(-dt / (Quiet ? 0.12 : AttackSeconds));
+        double fall = 1 - Math.Exp(-dt / (Quiet ? 0.35 : ReleaseSeconds));
         bool moved = false;
         for (int i = 0; i < _bars; i++)
         {
@@ -160,8 +166,8 @@ public sealed class Equalizer : FrameworkElement
             double presence = Math.Clamp(standing - _bandOfBar[bar], 0, 1);
             if (presence > Absent)
             {
-                if (_dots) DrawDots(dc, fill, x, h, _levels[bar], presence);
-                else DrawBar(dc, fill, x, h, _levels[bar], presence);
+                if (_dots && !Quiet) DrawDots(dc, fill, x, h, _levels[bar], presence);
+                else DrawBar(dc, fill, x, h, _levels[bar] * (Quiet ? 0.34 : 1), presence);
             }
             x += presence * (BarWidth + gap);
         }

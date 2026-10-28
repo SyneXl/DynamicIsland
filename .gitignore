@@ -21,3 +21,11 @@ publish/
 Thumbs.db
 Desktop.ini
 .DS_Store
+
+# Task-local previews and generated artifacts
+work/
+out/
+artifacts/
+*.old
+*.new
+

@@ -8,9 +8,7 @@ namespace DynamicIsland;
 
 public partial class MainWindow
 {
-    const double UpdatePagePadding = 14;
-    const int MegabyteShift = 20;
-    const double LookHeight = 488, LookTilesHeight = 72;
+    const double LookHeight = 528, LookTilesHeight = 72, LookMaxHeight = 560;
     const int LargestScale = 130, ScaleStep = 5;
     const int LargestGap = 24, GapStep = 2;
 
@@ -20,23 +18,13 @@ public partial class MainWindow
 
     Border? _openLookTiles;
 
-    void SettingsRow_Click(object sender, RoutedEventArgs e) => ShowPanelAndCheckUpdate(Panel.Settings);
-
-    void UpdateRow_Click(object sender, RoutedEventArgs e) => ShowPanelAndCheckUpdate(Panel.Update);
-
-    void UpdateBack_Click(object sender, RoutedEventArgs e) => ShowPanel(Panel.Settings);
+    void SettingsRow_Click(object sender, RoutedEventArgs e) => ShowPanel(Panel.Settings);
 
     void LookRow_Click(object sender, RoutedEventArgs e) => ShowPanel(Panel.Look);
 
     void SettingsBack_Click(object sender, RoutedEventArgs e) => ShowPanel(Panel.Menu);
 
     void Exit_Click(object sender, RoutedEventArgs e) => Exit();
-
-    void ShowPanelAndCheckUpdate(Panel panel)
-    {
-        ShowPanel(panel);
-        _ = _updater.CheckAsync();
-    }
 
     void Autostart_Click(object sender, RoutedEventArgs e)
     {
@@ -109,75 +97,13 @@ public partial class MainWindow
         NetworkSwitch.Set(Settings.Network, animate);
         WeatherSwitch.Set(Settings.Weather, animate);
         FullscreenSwitch.Set(Settings.HideFullscreen, animate);
+        CinemaSwitch.Set(Settings.Cinema, animate);
         AutostartSwitch.Set(Autostart.Enabled, animate);
 
         Toggle[] sources = [LrclibSwitch, DeezerSwitch, NetEaseSwitch, QqMusicSwitch, KugouSwitch, PaxsenixSwitch];
         string[] chosen = SourceNames.Where((_, i) => Settings.LyricSources.HasFlag((LyricSource)(1 << i))).ToArray();
         for (int i = 0; i < sources.Length; i++) sources[i].Set(Settings.LyricSources.HasFlag((LyricSource)(1 << i)), animate);
         SourcesText.Text = chosen.Length == sources.Length ? "Все" : chosen.Length == 1 ? chosen[0] : $"{chosen.Length} из {sources.Length}";
-    }
-
-    async void Update_Click(object sender, RoutedEventArgs e)
-    {
-        if (_updater.State != Updater.Stage.Available) await _updater.CheckAsync(true);
-        else if (await _updater.InstallAsync()) Exit();
-    }
-
-    void RefreshUpdatePage()
-    {
-        Updater.Stage stage = _updater.State;
-        bool loading = stage == Updater.Stage.Loading, found = loading || stage == Updater.Stage.Available;
-        Version version = found ? _updater.LatestVersion! : Updater.CurrentVersion;
-
-        UpdateText.Foreground = found ? _orange : _dim;
-        UpdateText.Text = loading ? _updater.Percent + "%" : "v" + version;
-
-        UpdateVersion.Text = version.ToString();
-        UpdateFrom.Text = stage switch
-        {
-            Updater.Stage.Checking => "проверяю…",
-            Updater.Stage.Latest => "последняя версия",
-            Updater.Stage.Failed => "не получилось",
-            _ => found ? "вместо " + Updater.CurrentVersion : "",
-        };
-        UpdateNotes.SetVisible(found && _updater.Notes.Length > 0);
-        UpdateNotesText.Text = string.Join('\n', _updater.Notes.Select(note => "·  " + note));
-
-        UpdateButton.SetVisible(!loading);
-        UpdateLoad.SetVisible(loading);
-        UpdateButton.Content = stage switch
-        {
-            Updater.Stage.Available => "Обновить и перезапустить",
-            Updater.Stage.Checking => "Проверяю…",
-            Updater.Stage.Failed => "Попробовать ещё раз",
-            _ => "Проверить ещё раз",
-        };
-        if (found) UpdateButton.Background = _orange;
-        else UpdateButton.ClearValue(BackgroundProperty);
-        UpdateButton.Foreground = found ? Brushes.Black : Brushes.White;
-
-        if (loading) ShowUpdateProgress();
-        FitUpdatePage();
-        UpdateView();
-    }
-
-    void ShowUpdateProgress()
-    {
-        UpdateBytes.Text = $"{_updater.DownloadedBytes >> MegabyteShift} из {_updater.TotalBytes >> MegabyteShift} МБ";
-        LoadingText.Text = _updater.Percent + "%";
-        var fill = new DoubleAnimation(_updater.Percent / 100.0, Ms(200));
-        UpdateRing.BeginAnimation(Ring.ProgressProperty, fill);
-        LoadingRing.BeginAnimation(Ring.ProgressProperty, fill);
-    }
-
-    void FitUpdatePage()
-    {
-        UpdateBody.Measure(new Size(UpdatePage.Width, double.PositiveInfinity));
-        double height = Math.Ceiling(UpdateBody.DesiredSize.Height) + UpdatePagePadding;
-        if (height == UpdatePage.Height) return;
-
-        UpdatePage.Height = height;
-        if (_view == View.Update) UpdateTargets();
     }
 
     void SizeSlider_Changed(object? sender, EventArgs e) => SetScale((int)SizeSlider.Value);
@@ -276,7 +202,7 @@ public partial class MainWindow
 
     void LookTiles_SizeChanged(object sender, SizeChangedEventArgs e)
     {
-        LookView.Height = LookHeight + BackdropTiles.ActualHeight + LyricChangeTiles.ActualHeight + HoverTiles.ActualHeight;
+        LookView.Height = Math.Min(LookMaxHeight, LookHeight + BackdropTiles.ActualHeight + LyricChangeTiles.ActualHeight + HoverTiles.ActualHeight);
         if (_view == View.Look) UpdateTargets();
     }
 

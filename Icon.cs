@@ -7,8 +7,8 @@ namespace DynamicIsland;
 public enum Glyph
 {
     Mute, Quiet, Mid, Loud, Headphones, Speaker, Vpn, Offline, Wifi, Wired, Bell, Note, Battery, Minus, Plus, Chevron, Back,
-    Clock, Gear, Lines, Sparkle, Rim, Expand, Windows, Power, Look, Size, Gap, Drop, Moon, Tray, Cross, Bolt, VpnOff, Bars, Update,
-    Segments, Stars, Pointer, Record, Folder, Bulge, Sun, Cloud, CloudSun, Rain, Snow, Storm, Fog, Qr, Pin, Search, Check,
+    Clock, Gear, Lines, Sparkle, Rim, Expand, Windows, Power, Look, Size, Gap, Drop, Moon, Tray, Cross, Bolt, VpnOff, Bars,
+    Segments, Stars, Pointer, Record, Folder, Bulge, Sun, Cloud, CloudSun, Rain, Snow, Storm, Fog, Qr, Pin, Search, Check, Shield,
 }
 
 public sealed class Icon : FrameworkElement
@@ -78,6 +78,7 @@ public sealed class Icon : FrameworkElement
 
     static readonly Dictionary<Glyph, Art> Arts = new()
     {
+        [Glyph.Shield] = new(Lines: "M12,3 L20,6 V11 C20,16 16,20 12,22 C8,20 4,16 4,11 V6 Z M8,12 L11,15 L16,9", Line: 1.8),
         [Glyph.Headphones] = new("M3.6,14 H7 V19.6 H3.6 Z M17,14 H20.4 V19.6 H17 Z", "M4.6,14 V12.2 A7.4,7.4 0 0 1 19.4,12.2 V14"),
         [Glyph.Speaker] = new("F0 M7.2,3.4 H16.8 V20.6 H7.2 Z M12,5.4 A2.1,2.1 0 1 0 12,9.6 A2.1,2.1 0 1 0 12,5.4 Z"
             + " M12,11 A3.9,3.9 0 1 0 12,18.8 A3.9,3.9 0 1 0 12,11 Z"),
@@ -106,7 +107,6 @@ public sealed class Icon : FrameworkElement
             "M8,6.6 H16 A5.4,5.4 0 0 1 16,17.4 H8 A5.4,5.4 0 0 1 8,6.6 Z", 2.2),
         [Glyph.Expand] = new(Lines: "M4.5,9.5 V4.5 H9.5 M14.5,4.5 H19.5 V9.5 M19.5,14.5 V19.5 H14.5 M9.5,19.5 H4.5 V14.5", Line: 2.2),
         [Glyph.Windows] = new("M4.6,4.6 H10.4 V10.4 H4.6 Z M13.6,4.6 H19.4 V10.4 H13.6 Z M4.6,13.6 H10.4 V19.4 H4.6 Z M13.6,13.6 H19.4 V19.4 H13.6 Z"),
-        [Glyph.Update] = new(Lines: "M12,4.2 V14.6 M7.6,10.4 L12,14.8 L16.4,10.4 M5.2,19.4 H18.8", Line: 2.2),
         [Glyph.Power] = new(Lines: "M12,3.8 V11.4 M7.4,6.9 A7.2,7.2 0 1 0 16.6,6.9", Line: 2.2),
         [Glyph.Look] = new("M12,5 A7,7 0 0 1 12,19 Z", "M12,3.9 A8.1,8.1 0 1 0 12,20.1 A8.1,8.1 0 1 0 12,3.9 Z", 2.2),
         [Glyph.Size] = new(Lines: "M6,18 L18,6 M12,5 H19 V12 M12,19 H5 V12", Line: 2.2),

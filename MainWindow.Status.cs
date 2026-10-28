@@ -38,9 +38,20 @@ public partial class MainWindow
 
     void CheckFullscreen()
     {
-        bool hidden = Settings.HideFullscreen && !_pickingArea && Native.IsForegroundFullscreen(_hwnd);
-        if (hidden == _hiddenByFullscreen) return;
+        Native.FullscreenWindow? target = !_pickingArea && Native.TryGetForegroundFullscreen(_hwnd, out var window) ? window : null;
+        _fullscreenVideo.Observe(Settings.Cinema ? target : null);
+        bool cinema = Settings.Cinema && _fullscreenVideo.Active;
+        bool hidden = Settings.HideFullscreen && target != null && !(Settings.Cinema && (cinema || _fullscreenVideo.Pending));
+        if (hidden == _hiddenByFullscreen && cinema == _cinemaMode) return;
         _hiddenByFullscreen = hidden;
+        bool entering = cinema && !_cinemaMode;
+        _cinemaMode = cinema;
+        if (entering && !_ringing && _panel == Panel.None)
+        {
+            _transientView = null;
+            _transientTimeout.Cancel();
+        }
+        UpdateView();
         UpdateTargets();
     }
 

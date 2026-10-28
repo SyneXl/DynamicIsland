@@ -30,12 +30,14 @@ public partial class MainWindow
     {
         _hovered = true;
         _collapseTimeout.Cancel();
+        UpdateView();
         UpdateTargets();
     }
 
     void Island_MouseLeave(object sender, MouseEventArgs e)
     {
         _hovered = _pressed = false;
+        UpdateView();
         UpdateTargets();
         if (_panel != Panel.None) _collapseTimeout.Start(CollapseDelay);
     }
@@ -108,7 +110,7 @@ public partial class MainWindow
     void SkipByLean(double leant, double pace)
     {
         int way = -DragDirection(leant, pace, LeanToSkip);
-        if (way == 0 || !IsMediaActive) return;
+        if (way == 0 || !ShowMediaPage) return;
 
         RememberSkip(way);
         if (way > 0) _media.Next();
@@ -125,7 +127,7 @@ public partial class MainWindow
             return;
         }
         if (_ringing || _panel != Panel.None) SelectPanel(Panel.None);
-        else SelectPanel(IsMediaActive ? Panel.Player : _obs.Recording ? Panel.Record : _countdown.IsActive ? Panel.Timer : Panel.Player);
+        else SelectPanel(ShowMediaPage || _media.HomeSelected ? Panel.Player : _obs.Recording ? Panel.Record : _countdown.IsActive ? Panel.Timer : Panel.Player);
         UpdateView();
     }
 
@@ -194,7 +196,8 @@ public partial class MainWindow
         bool up = e.Delta > 0;
         int step = up ? 1 : -1;
         e.Handled = true;
-        if (Native.IsCtrlDown) SwitchSource(-step);
+        if (ScrollMenuPanel(e)) return;
+        if (Native.IsCtrlDown) NavigateOpenPage(-step);
         else if (_view == View.TimerSet) SetMinutes(_setupMinutes + step);
         else if (_view == View.Look && SizeRow.IsMouseOver) SetScale(Settings.Scale + step * ScaleStep);
         else if (_view == View.Look && GapRow.IsMouseOver) SetGap(Settings.Gap + step * GapStep);

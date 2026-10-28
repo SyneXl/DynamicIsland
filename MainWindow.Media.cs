@@ -46,20 +46,26 @@ public partial class MainWindow
 
     void OnMediaChanged()
     {
-        string title = _media.HasTrack ? _media.Name : "";
-        bool newTrack = title.Length > 0 && title != _lastTitle;
-        _lastTitle = title;
+        SyncSeekContext();
+        string track = _media.HasTrack ? _media.Name : "";
+        bool newTrack = track.Length > 0 && track != _lastTitle;
+        _lastTitle = track;
+        string title = _media.IsLoading ? "Загрузка…" : track;
+        PlayerControls.IsEnabled = _media.CanControl;
+        PlayerControls.Opacity = _media.CanControl ? 1 : 0.35;
+        SeekArea.IsHitTestVisible = _media.CanControl && _media.Seekable;
 
         bool asked = _clock.Elapsed.TotalSeconds - _sourceSwitchedAt < SkipMemorySeconds;
         string source = _media.Source;
         bool turned = source != _source && asked;
+        if (source != _source) _lastPlayedAt = DateTime.MinValue;
         if (source != _source) _sourceName = asked ? SourceApp.Name(source) : "";
         else if (newTrack && !asked) _sourceName = "";
         _source = source;
 
-        string artist = string.IsNullOrWhiteSpace(_media.Artist) ? UnknownArtist : _media.Artist;
+        string artist = _media.IsLoading ? "" : string.IsNullOrWhiteSpace(_media.Artist) ? UnknownArtist : _media.Artist;
         TitleBig.Text = ToastTitle.Text = title;
-        ArtistBig.Text = ToastArtist.Text = _sourceName.Length > 0 ? _sourceName + " · " + artist : artist;
+        ArtistBig.Text = ToastArtist.Text = _media.IsLoading ? _sourceName : _sourceName.Length > 0 ? _sourceName + " · " + artist : artist;
 
         if (!ReferenceEquals(_cover, _media.Art))
         {
@@ -76,7 +82,7 @@ public partial class MainWindow
         }
         if (_media.IsPlaying || turned) _lastPlayedAt = DateTime.UtcNow;
 
-        if (turned || (newTrack && _media.IsPlaying)) ShowTransient(View.Toast, ToastSeconds);
+        if (!_media.IsLoading && (turned || (newTrack && _media.IsPlaying))) ShowTransient(View.Toast, ToastSeconds);
         TrackLyrics();
         UpdateView();
         UpdateLyric();
@@ -108,15 +114,24 @@ public partial class MainWindow
     void SwitchSource(int direction)
     {
         double now = _clock.Elapsed.TotalSeconds;
-        if (now - _sourceSwitchedAt < SourceSwitchCooldown || !_media.SwitchSession(direction)) return;
+        if (now - _sourceSwitchedAt < SourceSwitchCooldown) return;
         _sourceSwitchedAt = now;
-        RememberSkip(direction);
+        _pageDirection = Math.Sign(direction);
+        try
+        {
+            if (!_media.NavigatePage(direction)) return;
+            RememberSkip(direction);
+            // Source-to-source keeps the same view, but still gives directional feedback.
+            if (_view is View.IdleBig or View.MediaBig) SlideIn(_views[_view], _pageDirection);
+            UpdateView();
+        }
+        finally { _pageDirection = 0; }
     }
 
     void SyncRim()
     {
-        bool music = _media.HasTrack && (_cover != null || Settings.Accent != null) && (IsMediaActive || _view == View.MediaBig);
-        Color? tint = Settings.Rim && music ? AccentColor : null;
+        bool music = !_media.HomeSelected && _media.HasTrack && (_cover != null || Settings.Accent != null) && (IsMediaActive || _view == View.MediaBig);
+        Color? tint = _cinemaDimmed ? Colors.Transparent : Settings.Rim && music ? AccentColor : null;
         if (tint == _rimColor) return;
         _rimColor = tint;
         Body.Tint(tint, TintTime);
@@ -156,8 +171,11 @@ public partial class MainWindow
 
     void SyncEq()
     {
-        _spectrum.Active = IsEqVisible && _media.IsPlaying;
-        if (IsEqVisible) _eqLoop.Start();
+        bool visible = IsEqVisible && !_hiddenByFullscreen;
+        _eqLoop.ShortestStep = _cinemaDimmed ? 1.0 / 30 : EqFrameSeconds;
+        _spectrum.Active = visible && _media.IsPlaying;
+        if (visible) _eqLoop.Start();
+        else _eqLoop.Stop();
     }
 
     bool AdvanceEq(double dt)
@@ -173,8 +191,9 @@ public partial class MainWindow
         }
 
         bool moving = Eq.Tick(bands, level, playing, now, dt);
-        moving |= Settings.Backdrop == Backdrop.Glow ? Glow.Tick(Eq, now, dt) : AdvanceBackdrop(bands, playing, now, dt);
-        return IsEqVisible && (playing || moving);
+        if (!_cinemaDimmed && _view == View.MediaBig)
+            moving |= Settings.Backdrop == Backdrop.Glow ? Glow.Tick(Eq, now, dt) : AdvanceBackdrop(bands, playing, now, dt);
+        return IsEqVisible && !_hiddenByFullscreen && (playing || moving);
     }
 
     bool AdvanceBackdrop(float[]? bands, bool playing, double now, double dt)

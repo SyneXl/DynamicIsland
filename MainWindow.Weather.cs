@@ -27,6 +27,7 @@ public partial class MainWindow
     IntPtr _typedAfter;
 
     bool IsTyping => _view == View.Place && IsActive;
+    double CompactHomeWidth => IdleWeather.Visibility == Visibility.Visible ? 176 : 118;
 
     void PrepareWeatherHours()
     {
@@ -44,6 +45,8 @@ public partial class MainWindow
     {
         WeatherService.Report? now = _weather.Now;
         InfoWeatherRow.SetVisible(now != null);
+        IdleWeather.SetVisible(now != null);
+        IdleView.Width = CompactHomeWidth;
         WeatherNow.SetVisible(now != null);
         WeatherHours.SetVisible(now != null);
         WeatherNote.SetVisible(now == null);
@@ -52,14 +55,15 @@ public partial class MainWindow
         if (now != null) ShowWeather(now);
         else ShowWeatherNote();
         FitWeatherPage();
+        if (_view == View.Idle) UpdateTargets();
     }
 
     void ShowWeather(WeatherService.Report now)
     {
         Glyph glyph = GlyphOf(now.Sky, now.Night);
-        InfoWeatherIcon.Kind = MenuWeatherIcon.Kind = WeatherIcon.Kind = glyph;
+        IdleWeatherIcon.Kind = InfoWeatherIcon.Kind = MenuWeatherIcon.Kind = WeatherIcon.Kind = glyph;
         WeatherIcon.Fill = glyph == Glyph.Sun ? _orange : glyph == Glyph.Moon ? _indigo : Brushes.White;
-        InfoWeather.Text = WeatherDegrees.Text = DescribeDegrees(now.Degrees);
+        IdleDegrees.Text = InfoWeather.Text = WeatherDegrees.Text = DescribeDegrees(now.Degrees);
         WeatherSky.Text = now.Sky switch
         {
             Sky.Clear => "Ясно",
@@ -188,7 +192,7 @@ public partial class MainWindow
 
     void OnDeactivated(object? sender, EventArgs e)
     {
-        if (_panel == Panel.Place && !_hovered) _collapseTimeout.Start(CollapseDelay);
+        if (_panel is Panel.Place or Panel.MenuLayout && !_hovered) _collapseTimeout.Start(CollapseDelay);
     }
 
     void PlaceField_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)

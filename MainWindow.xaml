@@ -18,6 +18,43 @@
 
         <FontFamily x:Key="Display">./Fonts/#SF Pro Display, SF Pro Display, Segoe UI Variable Display, Segoe UI</FontFamily>
 
+        <Style x:Key="IslandToolTip" TargetType="ToolTip">
+            <Setter Property="FontFamily" Value="./Fonts/#SF Pro Text, SF Pro Text, Segoe UI Variable Display, Segoe UI"/>
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="FontWeight" Value="Normal"/>
+            <Setter Property="Foreground" Value="#F2FFFFFF"/>
+            <Setter Property="Background" Value="#FA1C1C1E"/>
+            <Setter Property="BorderBrush" Value="#33FFFFFF"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Padding" Value="11,8"/>
+            <Setter Property="MaxWidth" Value="280"/>
+            <Setter Property="HasDropShadow" Value="False"/>
+            <Setter Property="Focusable" Value="False"/>
+            <Setter Property="IsHitTestVisible" Value="False"/>
+            <Setter Property="Placement" Value="Bottom"/>
+            <Setter Property="VerticalOffset" Value="6"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ToolTip">
+                        <Border Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}" Padding="{TemplateBinding Padding}"
+                                CornerRadius="11" SnapsToDevicePixels="True">
+                            <ContentPresenter RecognizesAccessKey="False">
+                                <ContentPresenter.Resources>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="TextWrapping" Value="Wrap"/>
+                                        <Setter Property="MaxWidth" Value="256"/>
+                                        <Setter Property="MaxHeight" Value="80"/>
+                                        <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
+                                    </Style>
+                                </ContentPresenter.Resources>
+                            </ContentPresenter>
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
         <LinearGradientBrush x:Key="ArtPlaceholder" StartPoint="0,0" EndPoint="1,1">
             <GradientStop Color="#48484A" Offset="0"/>
             <GradientStop Color="#1C1C1E" Offset="1"/>
@@ -71,6 +108,34 @@
             </Setter>
         </Style>
 
+        <Style x:Key="ZapretTransportButton" TargetType="Button">
+            <Setter Property="Focusable" Value="True"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Foreground" Value="#111111"/>
+            <Setter Property="Background" Value="#F2FFFFFF"/>
+            <Setter Property="Width" Value="64"/>
+            <Setter Property="Height" Value="64"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Disc" Background="{TemplateBinding Background}" CornerRadius="100" RenderTransformOrigin="0.5,0.5"
+                                BorderBrush="Transparent" BorderThickness="2">
+                            <Border.RenderTransform><ScaleTransform/></Border.RenderTransform>
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Disc" Property="Background" Value="White"/></Trigger>
+                            <Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="Disc" Property="BorderBrush" Value="{StaticResource Green}"/></Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="Disc" Property="RenderTransform"><Setter.Value><ScaleTransform ScaleX="0.94" ScaleY="0.94"/></Setter.Value></Setter>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False"><Setter TargetName="Disc" Property="Opacity" Value="0.45"/></Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
         <Style x:Key="RowButton" TargetType="Button">
             <Setter Property="Focusable" Value="False"/>
             <Setter Property="Foreground" Value="White"/>
@@ -83,6 +148,138 @@
                         <Border Background="Transparent" Padding="12,0">
                             <ContentPresenter VerticalAlignment="Center"/>
                         </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="MenuScrollViewer" TargetType="ScrollViewer">
+            <Setter Property="Focusable" Value="False"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ScrollViewer">
+                        <Grid>
+                            <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                            <ScrollContentPresenter x:Name="PART_ScrollContentPresenter" CanContentScroll="{TemplateBinding CanContentScroll}"
+                                                    Content="{TemplateBinding Content}" ContentTemplate="{TemplateBinding ContentTemplate}"/>
+                            <ScrollBar x:Name="PART_VerticalScrollBar" Grid.Column="1" Width="6" MinWidth="0" Orientation="Vertical"
+                                       Maximum="{TemplateBinding ScrollableHeight}" ViewportSize="{TemplateBinding ViewportHeight}"
+                                       Value="{TemplateBinding VerticalOffset}"
+                                       Visibility="{TemplateBinding ComputedVerticalScrollBarVisibility}"/>
+                        </Grid>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+            <Style.Resources>
+                <Style TargetType="ScrollBar">
+                    <Setter Property="Width" Value="6"/>
+                    <Setter Property="MinWidth" Value="0"/>
+                    <Setter Property="Background" Value="Transparent"/>
+                    <Setter Property="Focusable" Value="False"/>
+                    <Setter Property="Template">
+                        <Setter.Value>
+                            <ControlTemplate TargetType="ScrollBar">
+                                <Track x:Name="PART_Track" Orientation="Vertical" IsDirectionReversed="True"
+                                       Minimum="{TemplateBinding Minimum}" Maximum="{TemplateBinding Maximum}"
+                                       Value="{TemplateBinding Value}" ViewportSize="{TemplateBinding ViewportSize}">
+                                    <Track.DecreaseRepeatButton>
+                                        <RepeatButton Command="{x:Static ScrollBar.PageUpCommand}" Focusable="False">
+                                            <RepeatButton.Template><ControlTemplate TargetType="RepeatButton"><Border Background="Transparent"/></ControlTemplate></RepeatButton.Template>
+                                        </RepeatButton>
+                                    </Track.DecreaseRepeatButton>
+                                    <Track.Thumb>
+                                        <Thumb Width="4" MinWidth="0">
+                                            <Thumb.Template>
+                                                <ControlTemplate TargetType="Thumb">
+                                                    <Border x:Name="Grip" Background="#4DFFFFFF" CornerRadius="3" Margin="1,0"/>
+                                                    <ControlTemplate.Triggers>
+                                                        <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Grip" Property="Background" Value="#99FFFFFF"/></Trigger>
+                                                        <Trigger Property="IsDragging" Value="True"><Setter TargetName="Grip" Property="Background" Value="#CCFFFFFF"/></Trigger>
+                                                    </ControlTemplate.Triggers>
+                                                </ControlTemplate>
+                                            </Thumb.Template>
+                                        </Thumb>
+                                    </Track.Thumb>
+                                    <Track.IncreaseRepeatButton>
+                                        <RepeatButton Command="{x:Static ScrollBar.PageDownCommand}" Focusable="False">
+                                            <RepeatButton.Template><ControlTemplate TargetType="RepeatButton"><Border Background="Transparent"/></ControlTemplate></RepeatButton.Template>
+                                        </RepeatButton>
+                                    </Track.IncreaseRepeatButton>
+                                </Track>
+                            </ControlTemplate>
+                        </Setter.Value>
+                    </Setter>
+                </Style>
+            </Style.Resources>
+        </Style>
+
+        <Style x:Key="MenuEditButton" TargetType="Button" BasedOn="{StaticResource RowButton}">
+            <Setter Property="Padding" Value="12,0"/>
+            <Setter Property="Focusable" Value="True"/>
+            <Setter Property="Height" Value="44"/>
+            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="ToolTipService.ShowOnDisabled" Value="True"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Face" Background="{TemplateBinding Background}" CornerRadius="10" Padding="{TemplateBinding Padding}">
+                            <ContentPresenter VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Face" Property="Background" Value="#18FFFFFF"/></Trigger>
+                            <Trigger Property="IsPressed" Value="True"><Setter TargetName="Face" Property="Background" Value="#30FFFFFF"/></Trigger>
+                            <Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="Face" Property="Background" Value="#24FFFFFF"/></Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="MenuMoveButton" TargetType="Button" BasedOn="{StaticResource MenuEditButton}">
+            <Setter Property="Width" Value="32"/>
+            <Setter Property="Height" Value="36"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Face" Background="Transparent" CornerRadius="8" Margin="1,0">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Face" Property="Background" Value="#18FFFFFF"/></Trigger>
+                            <Trigger Property="IsPressed" Value="True"><Setter TargetName="Face" Property="Background" Value="#30FFFFFF"/></Trigger>
+                            <Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="Face" Property="Background" Value="#24FFFFFF"/></Trigger>
+                            <Trigger Property="IsEnabled" Value="False"><Setter TargetName="Face" Property="Opacity" Value="0.2"/></Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="PageArrow" TargetType="Button">
+            <Setter Property="Focusable" Value="False"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Width" Value="24"/>
+            <Setter Property="Height" Value="40"/>
+            <Setter Property="Visibility" Value="Collapsed"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Grid Background="Transparent">
+                            <ContentPresenter x:Name="Arrow" Opacity="0.16" HorizontalAlignment="Center" VerticalAlignment="Center"
+                                              RenderTransformOrigin="0.5,0.5">
+                                <ContentPresenter.RenderTransform><ScaleTransform/></ContentPresenter.RenderTransform>
+                            </ContentPresenter>
+                        </Grid>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Arrow" Property="Opacity" Value="0.65"/>
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="Arrow" Property="Opacity" Value="1"/>
+                                <Setter TargetName="Arrow" Property="RenderTransform"><Setter.Value><ScaleTransform ScaleX="0.92" ScaleY="0.92"/></Setter.Value></Setter>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
                     </ControlTemplate>
                 </Setter.Value>
             </Setter>
@@ -404,9 +601,16 @@
             <Grid x:Name="Host">
 
                 <Grid x:Name="IdleView" Width="118" Height="34" HorizontalAlignment="Center" VerticalAlignment="Top">
-                    <local:Digits x:Name="IdleClock" Text="00:00" FontSize="13.5" FontWeight="SemiBold"
-                                  HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center">
+                        <local:Digits x:Name="IdleClock" Text="00:00" FontSize="13.5" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                        <StackPanel x:Name="IdleWeather" Orientation="Horizontal" Margin="14,0,0,0" Visibility="Collapsed" VerticalAlignment="Center">
+                            <local:Icon x:Name="IdleWeatherIcon" Kind="Cloud" Width="15" Height="15" Fill="{StaticResource Dim}" VerticalAlignment="Center"/>
+                            <local:Digits x:Name="IdleDegrees" FontSize="13" FontWeight="SemiBold" Margin="6,0,0,0" Foreground="{StaticResource Dim}" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </StackPanel>
                 </Grid>
+
+                <Grid x:Name="CinemaMediaView" Width="96" Height="34" HorizontalAlignment="Center" VerticalAlignment="Top" IsHitTestVisible="False"/>
 
                 <Grid x:Name="MediaView" Width="210" Height="34" HorizontalAlignment="Center" VerticalAlignment="Top">
                     <Canvas x:Name="LyricBox" Height="34" Margin="36,0,41,0"
@@ -439,19 +643,6 @@
                     <Ellipse x:Name="RecordDot" Width="10" Height="10" Fill="{StaticResource Red}"
                              HorizontalAlignment="Left" VerticalAlignment="Center" Margin="14,0,0,0"/>
                     <local:Digits x:Name="RecordText" Text="0:00" FontSize="13.5" FontWeight="SemiBold" Foreground="{StaticResource Red}"
-                                  HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,0,14,0"/>
-                </Grid>
-
-                <Grid x:Name="LoadingView" Width="118" Height="34" HorizontalAlignment="Center" VerticalAlignment="Top">
-                    <local:Ring x:Name="LoadingRing" Width="18" Height="18" Progress="0" Stroke="{StaticResource Orange}"
-                                RenderTransformOrigin="0.5,0.5"
-                                HorizontalAlignment="Left" VerticalAlignment="Center" Margin="9,0,0,0">
-                        <local:Ring.RenderTransform>
-                            <ScaleTransform ScaleX="-1"/>
-                        </local:Ring.RenderTransform>
-                    </local:Ring>
-                    <local:Digits x:Name="LoadingText" Text="0%" FontSize="13.5" FontWeight="SemiBold"
-                                  Foreground="{StaticResource Orange}"
                                   HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,0,14,0"/>
                 </Grid>
 
@@ -592,7 +783,7 @@
                     </Grid>
 
                     <local:Puddle HorizontalAlignment="Center" VerticalAlignment="Bottom" Margin="0,0,0,8">
-                    <StackPanel Orientation="Horizontal">
+                    <StackPanel x:Name="PlayerControls" Orientation="Horizontal">
                         <Button Style="{StaticResource IconButton}" Click="Prev_Click">
                             <local:Skip x:Name="PrevIcon" Back="True"/>
                         </Button>
@@ -783,10 +974,13 @@
                     </Button>
                 </Grid>
 
-                <Grid x:Name="MenuView" Width="300" Height="368" HorizontalAlignment="Center" VerticalAlignment="Top">
-                    <local:RowList Margin="10,14,10,0">
+                <Grid x:Name="MenuView" Width="300" Height="408" HorizontalAlignment="Center" VerticalAlignment="Top">
+                    <StackPanel Margin="10,14,10,14">
                         <TextBlock Style="{StaticResource Caption}" Text="DYNAMIC ISLAND" Margin="12,0,0,6"/>
-                        <Button Style="{StaticResource RowButton}" Click="TimerRow_Click">
+                        <ScrollViewer x:Name="MenuScroll" Style="{StaticResource MenuScrollViewer}" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
+                                      PreviewMouseWheel="MenuScroll_PreviewMouseWheel">
+                        <local:RowList x:Name="MenuRows">
+                        <Button Style="{StaticResource RowButton}" Tag="timer" Click="TimerRow_Click">
                             <Grid>
                                 <local:Icon Style="{StaticResource RowIcon}" Kind="Clock"/>
                                 <TextBlock Style="{StaticResource RowLabel}" Text="Таймер"/>
@@ -796,7 +990,7 @@
                                 </StackPanel>
                             </Grid>
                         </Button>
-                        <Button Style="{StaticResource RowButton}" Click="RecordRow_Click">
+                        <Button Style="{StaticResource RowButton}" Tag="obs" Click="RecordRow_Click">
                             <Grid>
                                 <local:Icon x:Name="MenuRecordIcon" Style="{StaticResource RowIcon}" Kind="Record"/>
                                 <TextBlock Style="{StaticResource RowLabel}" Text="Запись OBS"/>
@@ -806,7 +1000,7 @@
                                 </StackPanel>
                             </Grid>
                         </Button>
-                        <Button Style="{StaticResource RowButton}" Click="ShelfRow_Click">
+                        <Button Style="{StaticResource RowButton}" Tag="shelf" Click="ShelfRow_Click">
                             <Grid>
                                 <local:Icon Style="{StaticResource RowIcon}" Kind="Tray"/>
                                 <TextBlock Style="{StaticResource RowLabel}" Text="Полка"/>
@@ -816,7 +1010,7 @@
                                 </StackPanel>
                             </Grid>
                         </Button>
-                        <Button Style="{StaticResource RowButton}" Click="WeatherRow_Click">
+                        <Button Style="{StaticResource RowButton}" Tag="weather" Click="WeatherRow_Click">
                             <Grid>
                                 <local:Icon x:Name="MenuWeatherIcon" Style="{StaticResource RowIcon}" Kind="CloudSun"/>
                                 <TextBlock Style="{StaticResource RowLabel}" Text="Погода"/>
@@ -826,34 +1020,186 @@
                                 </StackPanel>
                             </Grid>
                         </Button>
-                        <Button Style="{StaticResource RowButton}" Click="QrRow_Click">
+                        <Button Style="{StaticResource RowButton}" Tag="qr" Click="QrRow_Click">
                             <Grid>
                                 <local:Icon Style="{StaticResource RowIcon}" Kind="Qr"/>
                                 <TextBlock Style="{StaticResource RowLabel}" Text="QR-код с экрана"/>
                                 <local:Icon Style="{StaticResource RowChevron}"/>
                             </Grid>
                         </Button>
-                        <Button Style="{StaticResource RowButton}" Click="SettingsRow_Click">
+                        <Button Style="{StaticResource RowButton}" Tag="codex" Click="CodexRow_Click">
+                            <Grid>
+                                <local:Icon Style="{StaticResource RowIcon}" Kind="Sparkle"/>
+                                <TextBlock Style="{StaticResource RowLabel}" Text="Codex"/>
+                                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
+                                    <local:Digits x:Name="MenuCodex" Foreground="{StaticResource Dim}" VerticalAlignment="Center"/>
+                                    <local:Icon Style="{StaticResource RowChevron}" Margin="8,1,0,0"/>
+                                </StackPanel>
+                            </Grid>
+                        </Button>
+                        <Button Style="{StaticResource RowButton}" Tag="zapret" Click="ZapretRow_Click">
+                            <Grid>
+                                <local:Icon Style="{StaticResource RowIcon}" Kind="Shield"/>
+                                <TextBlock Style="{StaticResource RowLabel}" Text="Zapret"/>
+                                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
+                                    <TextBlock x:Name="MenuZapret" Foreground="{StaticResource Dim}" VerticalAlignment="Center"/>
+                                    <local:Icon Style="{StaticResource RowChevron}" Margin="8,1,0,0"/>
+                                </StackPanel>
+                            </Grid>
+                        </Button>
+                        <Button Style="{StaticResource RowButton}" Tag="settings" Click="SettingsRow_Click">
                             <Grid>
                                 <local:Icon Style="{StaticResource RowIcon}" Kind="Gear"/>
                                 <TextBlock Style="{StaticResource RowLabel}" Text="Настройки"/>
                                 <local:Icon Style="{StaticResource RowChevron}"/>
                             </Grid>
                         </Button>
-                        <Button Style="{StaticResource RowButton}" Click="LookRow_Click">
+                        <Button Style="{StaticResource RowButton}" Tag="appearance" Click="LookRow_Click">
                             <Grid>
                                 <local:Icon Style="{StaticResource RowIcon}" Kind="Look"/>
                                 <TextBlock Style="{StaticResource RowLabel}" Text="Оформление"/>
                                 <local:Icon Style="{StaticResource RowChevron}"/>
                             </Grid>
                         </Button>
-                        <Button Style="{StaticResource RowButton}" Click="Exit_Click">
+                        <Button Style="{StaticResource RowButton}" Tag="exit" Click="Exit_Click">
                             <Grid>
                                 <local:Icon Style="{StaticResource RowIcon}" Kind="Power" Fill="{StaticResource Red}"/>
                                 <TextBlock Style="{StaticResource RowLabel}" Text="Закрыть остров" Foreground="{StaticResource Red}"/>
                             </Grid>
                         </Button>
-                    </local:RowList>
+                        </local:RowList>
+                        </ScrollViewer>
+                    </StackPanel>
+                </Grid>
+
+                <Grid x:Name="CodexView" Width="320" Height="304" HorizontalAlignment="Center" VerticalAlignment="Top">
+                    <StackPanel x:Name="CodexBody" Margin="10,8,10,0">
+                        <Button Style="{StaticResource BackButton}" Content="CODEX" Click="SettingsBack_Click"/>
+                        <StackPanel Margin="18,6,18,0">
+                            <Grid Height="30">
+                                <TextBlock x:Name="CodexFiveLabel" Text="5 часов" Foreground="{StaticResource Dim}" FontSize="12" VerticalAlignment="Center"/>
+                                <local:Digits x:Name="CodexFiveValue" FontSize="24" HorizontalAlignment="Right" VerticalAlignment="Center"
+                                              AutomationProperties.Name="Остаток пятичасового лимита"/>
+                            </Grid>
+                            <Grid Height="4" Margin="0,8,0,8">
+                                <Border Background="#24FFFFFF" CornerRadius="2"/>
+                                <Border x:Name="CodexFiveFill" Background="White" CornerRadius="2" HorizontalAlignment="Left" Width="0"/>
+                            </Grid>
+                            <TextBlock x:Name="CodexFiveReset" Foreground="{StaticResource Dim}" FontSize="10.5"/>
+                            <Grid Height="28" Margin="0,18,0,0">
+                                <TextBlock x:Name="CodexWeekLabel" Text="Неделя" Foreground="{StaticResource Dim}" FontSize="12" VerticalAlignment="Center"/>
+                                <local:Digits x:Name="CodexWeekValue" FontSize="19" HorizontalAlignment="Right" VerticalAlignment="Center"
+                                              AutomationProperties.Name="Остаток недельного лимита"/>
+                            </Grid>
+                            <Grid Height="3" Margin="0,6,0,8">
+                                <Border Background="#24FFFFFF" CornerRadius="2"/>
+                                <Border x:Name="CodexWeekFill" Background="#99FFFFFF" CornerRadius="2" HorizontalAlignment="Left" Width="0"/>
+                            </Grid>
+                            <TextBlock x:Name="CodexWeekReset" Foreground="{StaticResource Dim}" FontSize="10.5"/>
+                        </StackPanel>
+                        <Button Style="{StaticResource RowButton}" Margin="0,12,0,0" Click="CodexAutoPing_Click"
+                                ToolTip="Запрос после сброса, пока островок работает.">
+                            <Grid Margin="6,0">
+                                <TextBlock x:Name="CodexAutoLabel" Text="Автопинг" FontSize="12" VerticalAlignment="Center"/>
+                                <local:Toggle x:Name="CodexAutoSwitch" Style="{StaticResource RowSwitch}"/>
+                            </Grid>
+                        </Button>
+                        <TextBlock x:Name="CodexStatus" Margin="18,3,18,0" Height="32" TextWrapping="Wrap"
+                                   Foreground="{StaticResource Faint}" FontSize="10.5"/>
+                        <Button x:Name="CodexRefresh" Style="{StaticResource ChipButton}" Content="Обновить"
+                                Margin="18,4,18,0" Click="CodexRefresh_Click"/>
+                    </StackPanel>
+                </Grid>
+
+                <Grid x:Name="ZapretView" Width="360" Height="284" HorizontalAlignment="Center" VerticalAlignment="Top">
+                    <ScrollViewer x:Name="ZapretScroll" Style="{StaticResource MenuScrollViewer}" VerticalScrollBarVisibility="Auto"
+                                  HorizontalScrollBarVisibility="Disabled" PreviewMouseWheel="MenuScroll_PreviewMouseWheel">
+                        <StackPanel x:Name="ZapretContent" Margin="10,8,10,14">
+                            <Grid Height="32">
+                                <Button Style="{StaticResource BackButton}" Content="ZAPRET" Click="SettingsBack_Click" HorizontalAlignment="Left" Width="210"/>
+                                <Button x:Name="ZapretRefresh" Style="{StaticResource RowButton}" Click="ZapretRefresh_Click"
+                                        Width="38" Height="32" HorizontalAlignment="Right" Margin="0,0,4,0" ToolTip="Обновить статус"
+                                        AutomationProperties.Name="Обновить статус Zapret">
+                                    <Path Data="M19,8 A8,8 0 1 0 20,15 M19,3 V8 H14" Stroke="{StaticResource Dim}" StrokeThickness="1.7"
+                                          StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round" Width="16" Height="16" Stretch="Uniform"/>
+                                </Button>
+                            </Grid>
+                            <Grid Height="96" Margin="12,8,12,8">
+                                <Grid.ColumnDefinitions><ColumnDefinition Width="64"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                                <Button x:Name="ZapretAction" Style="{StaticResource ZapretTransportButton}" Click="ZapretAction_Click" VerticalAlignment="Center">
+                                    <Grid Width="24" Height="24" IsHitTestVisible="False">
+                                        <Path x:Name="ZapretPlayIcon" Data="M6,3 L21,12 L6,21 Z" Fill="{Binding Foreground, ElementName=ZapretAction}"
+                                              Stroke="{Binding Foreground, ElementName=ZapretAction}" StrokeThickness="1.5" StrokeLineJoin="Round"/>
+                                        <Path x:Name="ZapretPauseIcon" Data="M4,3 H9 V21 H4 Z M15,3 H20 V21 H15 Z"
+                                              Fill="{Binding Foreground, ElementName=ZapretAction}" Visibility="Collapsed"/>
+                                        <Path x:Name="ZapretSpinner" Data="M12,2 A10,10 0 1 1 2,12" Stroke="{Binding Foreground, ElementName=ZapretAction}"
+                                              StrokeThickness="2.2" StrokeStartLineCap="Round" StrokeEndLineCap="Round" Visibility="Collapsed">
+                                            <Path.RenderTransform><RotateTransform CenterX="12" CenterY="12"/></Path.RenderTransform>
+                                        </Path>
+                                    </Grid>
+                                </Button>
+                                <StackPanel Grid.Column="1" Margin="20,0,0,0" VerticalAlignment="Center">
+                                    <TextBlock x:Name="ZapretState" Text="Проверяю…" FontSize="22" FontWeight="SemiBold"/>
+                                    <TextBlock x:Name="ZapretActive" FontSize="12" Foreground="{StaticResource Dim}" Margin="0,5,0,0" TextTrimming="CharacterEllipsis"/>
+                                </StackPanel>
+                            </Grid>
+                            <local:RowList>
+                                <Button x:Name="ZapretFolderButton" Style="{StaticResource RowButton}" Height="54" Click="ZapretFolders_Click">
+                                    <Grid>
+                                        <StackPanel Margin="0,0,20,0" VerticalAlignment="Center">
+                                            <TextBlock Text="Папка" FontSize="12" Foreground="{StaticResource Dim}"/>
+                                            <TextBlock x:Name="ZapretFolderText" Text="Выбери папку" Margin="0,4,0,0" TextTrimming="CharacterEllipsis"/>
+                                        </StackPanel>
+                                        <local:Icon Style="{StaticResource RowChevron}"/>
+                                    </Grid>
+                                </Button>
+                                <Button x:Name="ZapretStrategyButton" Style="{StaticResource RowButton}" Height="54" Click="ZapretStrategies_Click">
+                                    <Grid>
+                                        <StackPanel Margin="0,0,20,0" VerticalAlignment="Center">
+                                            <TextBlock Text="Стратегия" FontSize="12" Foreground="{StaticResource Dim}"/>
+                                            <TextBlock x:Name="ZapretStrategyText" Text="Выбери стратегию" Margin="0,4,0,0" TextTrimming="CharacterEllipsis"/>
+                                        </StackPanel>
+                                        <local:Icon Style="{StaticResource RowChevron}"/>
+                                    </Grid>
+                                </Button>
+                            </local:RowList>
+                            <StackPanel x:Name="ZapretActions" Orientation="Horizontal" Margin="10,8,10,0">
+                            <Button x:Name="ZapretApply" Style="{StaticResource ChipButton}" Content="Применить" MinWidth="102" Height="30" Visibility="Collapsed" Click="ZapretApply_Click" ToolTip="Перезапустить с выбранной стратегией"/>
+                            <Button x:Name="ZapretCleanup" Style="{StaticResource ChipButton}" Content="Удалить службу" MinWidth="134" Height="30" Visibility="Collapsed" Click="ZapretCleanup_Click" ToolTip="Убрать службу из автозапуска"/>
+                            </StackPanel>
+                            <TextBlock x:Name="ZapretOperationNote" FontSize="12" Foreground="{StaticResource Dim}" TextWrapping="Wrap" Margin="12,8,12,0" Visibility="Collapsed"/>
+                        </StackPanel>
+                    </ScrollViewer>
+                </Grid>
+
+                <Grid x:Name="ZapretFoldersView" Width="420" Height="466" HorizontalAlignment="Center" VerticalAlignment="Top">
+                    <Grid Margin="10,8,10,14">
+                        <Grid.RowDefinitions><RowDefinition Height="34"/><RowDefinition Height="36"/><RowDefinition Height="44"/><RowDefinition Height="*"/><RowDefinition Height="28"/></Grid.RowDefinitions>
+                        <Button Style="{StaticResource BackButton}" Content="КОПИИ ZAPRET" Click="ZapretBack_Click"/>
+                        <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="10,0">
+                            <Button x:Name="ZapretScanButton" Style="{StaticResource ChipButton}" Content="Найти на компьютере" Width="188" Click="ZapretScan_Click"/>
+                            <Button x:Name="ZapretBrowseButton" Style="{StaticResource ChipButton}" Content="Выбрать папку" Width="154" Click="ZapretBrowse_Click"/>
+                        </StackPanel>
+                        <TextBlock x:Name="ZapretScanNote" Grid.Row="2" FontSize="10.5" Foreground="{StaticResource Dim}" TextWrapping="Wrap" Margin="12,8,12,0" Text="Поиск распакованных копий на локальных дисках"/>
+                        <ScrollViewer x:Name="ZapretFoldersScroll" Grid.Row="3" Style="{StaticResource MenuScrollViewer}" VerticalScrollBarVisibility="Auto"
+                                      HorizontalScrollBarVisibility="Disabled" PreviewMouseWheel="MenuScroll_PreviewMouseWheel">
+                            <local:RowList x:Name="ZapretFolderRows"/>
+                        </ScrollViewer>
+                        <TextBlock x:Name="ZapretNoFolders" Grid.Row="3" Text="Пока ничего не найдено. Можно выбрать папку вручную." FontSize="12" Foreground="{StaticResource Dim}" TextWrapping="Wrap" Margin="12,20" IsHitTestVisible="False"/>
+                        <TextBlock Grid.Row="4" Text="Архивы, ссылки и недоступные папки не сканируются" FontSize="10" Foreground="{StaticResource Faint}" Margin="12,10,0,0"/>
+                    </Grid>
+                </Grid>
+
+                <Grid x:Name="ZapretStrategiesView" Width="380" Height="432" HorizontalAlignment="Center" VerticalAlignment="Top">
+                    <Grid Margin="10,8,10,14">
+                        <Grid.RowDefinitions><RowDefinition Height="34"/><RowDefinition Height="34"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+                        <Button Style="{StaticResource BackButton}" Content="СТРАТЕГИЯ ZAPRET" Click="ZapretBack_Click"/>
+                        <TextBlock Grid.Row="1" Text="Выбор не перезапускает работающую службу" FontSize="10.5" Foreground="{StaticResource Dim}" Margin="12,6,0,0"/>
+                        <ScrollViewer x:Name="ZapretStrategiesScroll" Grid.Row="2" Style="{StaticResource MenuScrollViewer}" VerticalScrollBarVisibility="Auto"
+                                      HorizontalScrollBarVisibility="Disabled" PreviewMouseWheel="MenuScroll_PreviewMouseWheel">
+                            <local:RowList x:Name="ZapretStrategyRows"/>
+                        </ScrollViewer>
+                    </Grid>
                 </Grid>
 
                 <Grid x:Name="SettingsView" Width="320" Height="454" HorizontalAlignment="Center" VerticalAlignment="Top">
@@ -914,7 +1260,7 @@
                         <Button Style="{StaticResource RowButton}" Click="Fullscreen_Click">
                             <Grid>
                                 <local:Icon Style="{StaticResource RowIcon}" Kind="Expand"/>
-                                <TextBlock Style="{StaticResource RowLabel}" Text="Скрывать на полном экране"/>
+                                <TextBlock Style="{StaticResource RowLabel}" Text="Скрывать в других окнах"/>
                                 <local:Toggle x:Name="FullscreenSwitch" Style="{StaticResource RowSwitch}"/>
                             </Grid>
                         </Button>
@@ -925,14 +1271,12 @@
                                 <local:Toggle x:Name="AutostartSwitch" Style="{StaticResource RowSwitch}"/>
                             </Grid>
                         </Button>
-                        <Button Style="{StaticResource RowButton}" Click="UpdateRow_Click">
+                        <Button Style="{StaticResource RowButton}" Click="Cinema_Click"
+                                ToolTip="Приглушать остров поверх полноэкранного видео.">
                             <Grid>
-                                <local:Icon Style="{StaticResource RowIcon}" Kind="Update"/>
-                                <TextBlock Style="{StaticResource RowLabel}" Text="Обновление"/>
-                                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
-                                    <TextBlock x:Name="UpdateText" Foreground="{StaticResource Dim}" VerticalAlignment="Center"/>
-                                    <local:Icon Style="{StaticResource RowChevron}" Margin="8,1,0,0"/>
-                                </StackPanel>
+                                <local:Icon Style="{StaticResource RowIcon}" Kind="Drop"/>
+                                <TextBlock Style="{StaticResource RowLabel}" Text="Кинорежим для видео"/>
+                                <local:Toggle x:Name="CinemaSwitch" Style="{StaticResource RowSwitch}"/>
                             </Grid>
                         </Button>
                     </local:RowList>
@@ -985,44 +1329,21 @@
                     </local:RowList>
                 </Grid>
 
-                <Grid x:Name="UpdatePage" Width="320" Height="150" HorizontalAlignment="Center" VerticalAlignment="Top">
-                    <StackPanel x:Name="UpdateBody" Margin="10,8,10,0" VerticalAlignment="Top">
-                        <local:RowList>
-                            <Button Style="{StaticResource BackButton}" Content="ОБНОВЛЕНИЕ" Click="UpdateBack_Click"/>
-                        </local:RowList>
-                        <StackPanel Orientation="Horizontal" Margin="12,2,12,0">
-                            <TextBlock x:Name="UpdateVersion" FontSize="30" FontWeight="SemiBold" Foreground="White"
-                                       FontFamily="{StaticResource Display}"/>
-                            <TextBlock x:Name="UpdateFrom" FontSize="13.5" Foreground="{StaticResource Dim}"
-                                       Margin="9,0,0,5" VerticalAlignment="Bottom"/>
-                        </StackPanel>
-                        <StackPanel x:Name="UpdateNotes" Margin="12,10,12,0">
-                            <TextBlock Style="{StaticResource Caption}" Text="ЧТО НОВОГО"/>
-                            <TextBlock x:Name="UpdateNotesText" FontSize="12.5" Foreground="{StaticResource Dim}" Margin="0,5,0,0"
-                                       TextWrapping="Wrap" LineHeight="18" LineStackingStrategy="BlockLineHeight"/>
-                        </StackPanel>
-                        <Grid Height="36" Margin="4,14,4,0">
-                            <Button x:Name="UpdateButton" Style="{StaticResource ChipButton}" Height="36" Margin="0"
-                                    FontSize="13.5" FontWeight="SemiBold" Click="Update_Click"/>
-                            <Grid x:Name="UpdateLoad" Margin="8,0" Visibility="Collapsed">
-                                <local:Ring x:Name="UpdateRing" Width="22" Height="22" Thickness="3" Progress="0"
-                                            Stroke="{StaticResource Orange}" RenderTransformOrigin="0.5,0.5"
-                                            HorizontalAlignment="Left" VerticalAlignment="Center">
-                                    <local:Ring.RenderTransform>
-                                        <ScaleTransform ScaleX="-1"/>
-                                    </local:Ring.RenderTransform>
-                                </local:Ring>
-                                <TextBlock Text="Скачиваю" FontSize="13.5" Foreground="White" Margin="34,0,0,0" VerticalAlignment="Center"/>
-                                <TextBlock x:Name="UpdateBytes" FontSize="13.5" Foreground="{StaticResource Dim}"
-                                           HorizontalAlignment="Right" VerticalAlignment="Center"/>
-                            </Grid>
-                        </Grid>
-                    </StackPanel>
-                </Grid>
-
-                <Grid x:Name="LookView" Width="352" Height="488" HorizontalAlignment="Center" VerticalAlignment="Top">
-                    <local:RowList Margin="10,8,10,0">
+                <Grid x:Name="LookView" Width="352" Height="528" HorizontalAlignment="Center" VerticalAlignment="Top">
+                    <ScrollViewer x:Name="LookScroll" Style="{StaticResource MenuScrollViewer}" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
+                                  PreviewMouseWheel="LookScroll_PreviewMouseWheel">
+                    <local:RowList Margin="10,8,10,14">
                         <Button Style="{StaticResource BackButton}" Content="ОФОРМЛЕНИЕ" Click="SettingsBack_Click"/>
+                        <Button x:Name="MenuLayoutRow" Style="{StaticResource RowButton}" Click="MenuLayoutRow_Click">
+                            <Grid>
+                                <local:Icon Style="{StaticResource RowIcon}" Kind="Lines"/>
+                                <TextBlock Style="{StaticResource RowLabel}" Text="Пункты меню"/>
+                                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
+                                    <TextBlock x:Name="MenuLayoutSummary" Foreground="{StaticResource Dim}" VerticalAlignment="Center"/>
+                                    <local:Icon Style="{StaticResource RowChevron}" Margin="8,1,0,0"/>
+                                </StackPanel>
+                            </Grid>
+                        </Button>
                         <Button x:Name="SizeRow" Style="{StaticResource RowButton}">
                             <Grid>
                                 <local:Icon Style="{StaticResource RowIcon}" Kind="Size"/>
@@ -1189,6 +1510,37 @@
                             <RadioButton Style="{StaticResource Swatch}" Background="#FF375F" Tag="Розовый" Click="Accent_Click"/>
                         </UniformGrid>
                     </local:RowList>
+                    </ScrollViewer>
+                </Grid>
+
+                <Grid x:Name="MenuLayoutView" Width="380" Height="408" HorizontalAlignment="Center" VerticalAlignment="Top"
+                      PreviewKeyDown="MenuLayout_PreviewKeyDown">
+                    <Grid Margin="10,8,10,14">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="34"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                        </Grid.RowDefinitions>
+                        <Grid>
+                            <Button x:Name="MenuLayoutBack" Style="{StaticResource BackButton}" Content="ПУНКТЫ МЕНЮ"
+                                    HorizontalAlignment="Left" Width="222" Focusable="True" Click="MenuLayoutBack_Click"/>
+                            <Button x:Name="MenuLayoutReset" Content="Сбросить" Width="78" Height="26"
+                                    HorizontalAlignment="Right" Margin="0,0,10,0" Focusable="True" Click="MenuLayoutReset_Click"
+                                    ToolTip="Вернуть исходное меню">
+                                <Button.Style>
+                                    <Style TargetType="Button" BasedOn="{StaticResource ChipButton}">
+                                        <Style.Triggers><Trigger Property="IsEnabled" Value="False"><Setter Property="Opacity" Value="0.35"/></Trigger></Style.Triggers>
+                                    </Style>
+                                </Button.Style>
+                            </Button>
+                        </Grid>
+                        <ScrollViewer x:Name="MenuEditorScroll" Style="{StaticResource MenuScrollViewer}" Grid.Row="1" VerticalScrollBarVisibility="Auto"
+                                      HorizontalScrollBarVisibility="Disabled" PreviewMouseWheel="MenuScroll_PreviewMouseWheel">
+                            <StackPanel x:Name="MenuEditorRows" KeyboardNavigation.TabNavigation="Continue"/>
+                        </ScrollViewer>
+                        <TextBlock x:Name="MenuLayoutStatus" Grid.Row="2" Margin="12,8,12,0" FontSize="12"
+                                   Foreground="{StaticResource Dim}" TextWrapping="Wrap" Visibility="Collapsed"/>
+                    </Grid>
                 </Grid>
 
                 <Grid x:Name="ShelfView" Width="380" Height="136" HorizontalAlignment="Center" VerticalAlignment="Top">
@@ -1343,6 +1695,18 @@
                         <TranslateTransform x:Name="EqMove"/>
                     </local:Equalizer.RenderTransform>
                 </local:Equalizer>
+            </Canvas>
+            <Canvas>
+                <Button x:Name="PagePrevious" Style="{StaticResource PageArrow}" Click="PagePrevious_Click"
+                                ToolTip="Предыдущая страница&#x0a;Ctrl + колесо" AutomationProperties.Name="Предыдущая страница острова">
+                    <local:Icon Kind="Back" Width="10" Height="14" Fill="White"/>
+                </Button>
+                <Button x:Name="PageNext" Style="{StaticResource PageArrow}" Click="PageNext_Click"
+                                ToolTip="Следующая страница&#x0a;Ctrl + колесо" AutomationProperties.Name="Следующая страница острова">
+                    <local:Icon Kind="Back" Width="10" Height="14" Fill="White" RenderTransformOrigin="0.5,0.5">
+                        <local:Icon.RenderTransform><ScaleTransform ScaleX="-1"/></local:Icon.RenderTransform>
+                    </local:Icon>
+                </Button>
             </Canvas>
         </Grid>
 

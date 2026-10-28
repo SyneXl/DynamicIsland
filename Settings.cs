@@ -57,6 +57,8 @@ static class Settings
     static bool _network = ReadSwitch(nameof(Network)), _hideFullscreen = ReadSwitch(nameof(HideFullscreen));
     static bool _rim = ReadSwitch(nameof(Rim)), _appVolume = ReadSwitch(nameof(AppVolume));
     static bool _weather = ReadSwitch(nameof(Weather));
+    static bool _cinema = ReadSwitch(nameof(Cinema));
+    static bool _codexAutoPing = ReadSwitch(nameof(CodexAutoPing), false);
     static Place? _place = ReadPlace();
     static bool _dots = ReadSwitch(nameof(Dots), false);
     static bool _lineBar = ReadSwitch(nameof(LineBar));
@@ -69,6 +71,24 @@ static class Settings
     static int _scale = Math.Clamp(Read(nameof(Scale), DefaultScale), MinScale, MaxScale);
     static int _gap = Math.Clamp(Read(nameof(Gap), DefaultGap), 0, MaxGap);
     static int _accent = Read(nameof(Accent), 0);
+    static MenuLayout _menu = MenuLayout.Parse(Read("MenuLayout", ""));
+    static ZapretPreferences _zapret = ZapretPreferences.Parse(Read("Zapret", ""));
+    public static ZapretPreferences Zapret => _zapret;
+    public static bool TrySetZapret(ZapretPreferences value)
+    {
+        if (!Write("Zapret", value.Serialize(), RegistryValueKind.String)) return false;
+        _zapret = value;
+        return true;
+    }
+
+    public static MenuLayout Menu => _menu;
+
+    public static bool TrySetMenuLayout(MenuLayout value)
+    {
+        if (!Write("MenuLayout", value.Serialize(), RegistryValueKind.String)) return false;
+        _menu = value;
+        return true;
+    }
 
     public static bool Dots
     {
@@ -171,6 +191,18 @@ static class Settings
         set => Write(nameof(HideFullscreen), _hideFullscreen = value);
     }
 
+    public static bool Cinema
+    {
+        get => _cinema;
+        set => Write(nameof(Cinema), _cinema = value);
+    }
+
+    public static bool CodexAutoPing
+    {
+        get => _codexAutoPing;
+        set => Write(nameof(CodexAutoPing), _codexAutoPing = value);
+    }
+
     public static int Scale
     {
         get => _scale;
@@ -224,16 +256,18 @@ static class Settings
 
     static void Write(string name, int value) => Write(name, value, RegistryValueKind.DWord);
 
-    static void Write(string name, object value, RegistryValueKind kind)
+    static bool Write(string name, object value, RegistryValueKind kind)
     {
         try
         {
             using RegistryKey key = Registry.CurrentUser.CreateSubKey(Key);
             key.SetValue(name, value, kind);
+            return true;
         }
         catch (Exception ex)
         {
             App.Log(ex);
+            return false;
         }
     }
 }

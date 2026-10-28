@@ -8,13 +8,13 @@ sealed class FrameLoop
     const double LongestStep = 0.05;
 
     readonly Func<double, bool> _advance;
-    readonly double _shortestStep;
+    public double ShortestStep { get; set; }
     long _last;
 
     public FrameLoop(Func<double, bool> advance, double shortestStep = 0)
     {
         _advance = advance;
-        _shortestStep = shortestStep;
+        ShortestStep = shortestStep;
     }
 
     public bool Running { get; private set; }
@@ -38,7 +38,7 @@ sealed class FrameLoop
     {
         long now = Stopwatch.GetTimestamp();
         double elapsed = Stopwatch.GetElapsedTime(_last, now).TotalSeconds;
-        if (elapsed <= 0 || elapsed < _shortestStep) return;
+        if (elapsed <= 0 || elapsed < ShortestStep) return;
 
         _last = now;
         if (!_advance(Math.Min(elapsed, LongestStep))) Stop();

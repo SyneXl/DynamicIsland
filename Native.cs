@@ -1,5 +1,6 @@
 using System.Runtime.InteropServices;
 using System.Text;
+using System.Windows;
 
 namespace DynamicIsland;
 
@@ -143,8 +144,25 @@ static class Native
     public static void KeepOnTop(IntPtr hwnd) =>
         SetWindowPos(hwnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
 
-    public static bool IsForegroundFullscreen(IntPtr self)
+    public static void KeepPopupAbove(IntPtr popup, IntPtr owner)
     {
+        if (popup == IntPtr.Zero || owner == IntPtr.Zero) return;
+        const int GWLP_HWNDPARENT = -8;
+        // Raising the overlay must not cover an unowned tooltip HWND.
+        if (GetWindowLongPtr(popup, GWLP_HWNDPARENT) != owner)
+            SetWindowLongPtr(popup, GWLP_HWNDPARENT, owner);
+        const uint SWP_NOOWNERZORDER = 0x0200;
+        SetWindowPos(popup, HWND_TOPMOST, 0, 0, 0, 0,
+            SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_NOOWNERZORDER);
+    }
+
+    public readonly record struct FullscreenWindow(IntPtr Handle, uint Process, Rect Bounds, bool Browser);
+
+    public static bool IsForegroundFullscreen(IntPtr self) => TryGetForegroundFullscreen(self, out _);
+
+    public static bool TryGetForegroundFullscreen(IntPtr self, out FullscreenWindow result)
+    {
+        result = default;
         IntPtr foreground = GetForegroundWindow();
         if (foreground == IntPtr.Zero || foreground == self || foreground == GetDesktopWindow() || foreground == GetShellWindow()) return false;
 
@@ -162,8 +180,16 @@ static class Native
         if ((info.dwFlags & MONITORINFOF_PRIMARY) == 0) return false;
 
         RECT monitor = info.rcMonitor;
-        return window.Left <= monitor.Left && window.Top <= monitor.Top && window.Right >= monitor.Right && window.Bottom >= monitor.Bottom;
+        if (window.Left > monitor.Left || window.Top > monitor.Top || window.Right < monitor.Right || window.Bottom < monitor.Bottom) return false;
+        GetWindowThreadProcessId(foreground, out uint process);
+        string name = className.ToString();
+        result = new FullscreenWindow(foreground, process,
+            new Rect(monitor.Left, monitor.Top, monitor.Right - monitor.Left, monitor.Bottom - monitor.Top),
+            name.StartsWith("Chrome_WidgetWin", StringComparison.Ordinal) || name == "MozillaWindowClass");
+        return true;
     }
+
+    [DllImport("user32.dll")] static extern uint GetWindowThreadProcessId(IntPtr hwnd, out uint process);
 
     public static bool? IsDoNotDisturbOn()
     {
