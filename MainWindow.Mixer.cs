@@ -8,11 +8,12 @@ namespace DynamicIsland;
 
 public partial class MainWindow
 {
-    sealed record MixerRow(Grid Root, Button Mute, Icon Icon, TextBlock Name, TextBlock Percent, Scrubber Slider)
+    sealed record MixerRow(Grid Root, Button Mute, Icon Icon, Image AppIcon, Icon AppFallback, TextBlock Name, TextBlock Percent, Scrubber Slider)
     {
         public MixerChannel? Channel;
     }
     readonly Dictionary<string, MixerRow> _mixerRows = new(StringComparer.OrdinalIgnoreCase);
+    readonly MixerIcons _mixerIcons = new();
     MixerSnapshot? _mixerSnapshot;
     Panel _mixerReturnPanel;
     Func<MixerSnapshot?>? _mixerReader = null;
@@ -34,9 +35,11 @@ public partial class MainWindow
 
     void MixerBack_Click(object sender, RoutedEventArgs e) => ShowPanel(_mixerReturnPanel);
 
-    void RefreshMixer()
+    void RefreshMixer() => ReadAndRefreshMixer(false);
+
+    void ReadAndRefreshMixer(bool duringInput, MixerRow? reset = null)
     {
-        if (Mouse.Captured != null && MixerView.IsMouseCaptureWithin) return;
+        if (!duringInput && Mouse.Captured != null && MixerView.IsMouseCaptureWithin) return;
         MixerSnapshot? snapshot = _mixerReader != null ? _mixerReader() : _audio.ReadMixer();
         _mixerSnapshot = snapshot;
         MixerUnavailable.SetVisible(snapshot == null);
@@ -60,12 +63,18 @@ public partial class MainWindow
             }
             row.Channel = channel;
             row.Name.Text = channel.Name;
-            row.Percent.Text = ((int)Math.Round(channel.Volume * 100)) + "%";
-            row.Slider.Set(channel.Volume * 100, false);
-            row.Icon.Kind = channel.Muted || channel.Volume == 0 ? Glyph.Mute : Glyph.Loud;
-            row.Slider.Opacity = channel.Muted ? 0.4 : 1;
-            row.Mute.ToolTip = channel.Muted ? "Включить звук" : "Выключить звук";
-            AutomationProperties.SetName(row.Mute, channel.Name + (channel.Muted ? ": включить звук" : ": выключить звук"));
+            row.Percent.Text = MixerVolume.Percent(channel.Volume) + "%";
+            // Do not reset the grabbed knob while Core Audio rounds its actual value.
+            // Every other row (including master) still follows this drag immediately.
+            if (!row.Root.IsMouseCaptureWithin || ReferenceEquals(row, reset)) row.Slider.Set(channel.Volume * 100, false);
+            bool muted = channel.Muted || snapshot.Muted;
+            row.Icon.Kind = muted || channel.Volume == 0 ? Glyph.Mute : Glyph.Loud;
+            row.Slider.Opacity = muted ? 0.4 : 1;
+            row.Mute.ToolTip = muted ? "Включить звук" : "Выключить звук";
+            AutomationProperties.SetName(row.Mute, channel.Name + (muted ? ": включить звук" : ": выключить звук"));
+            row.AppIcon.Source = channel.Key == "master" ? null : _mixerIcons.Get(channel.IconPath, channel.Key);
+            row.AppIcon.SetVisible(row.AppIcon.Source != null);
+            row.AppFallback.SetVisible(row.AppIcon.Source == null);
         }
         // Do not reorder rows as sessions start/stop; that would move a control under the pointer.
         MixerScroll.Height = Math.Min(350, channels.Length * 66);
@@ -78,8 +87,14 @@ public partial class MainWindow
         var grid = new Grid { Height = 66, Margin = new Thickness(0, 0, 0, 0) };
         var icon = new Icon { Kind = Glyph.Loud, Width = 17, Height = 17, Fill = _dim };
         var mute = new Button { Content = icon, Style = (Style)FindResource("IconButton"), Width = 34, Height = 34,
-            HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Center };
+            Margin = new Thickness(0, 25, 0, 0), HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Top };
         grid.Children.Add(mute);
+        var appIcon = new Image { Width = 20, Height = 20, Stretch = Stretch.Uniform, IsHitTestVisible = false,
+            HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(7, 5, 0, 0) };
+        var fallback = new Icon { Kind = key == "master" ? Glyph.Speaker : key == "system" ? Glyph.Bell : Glyph.Windows,
+            Width = 20, Height = 20, Fill = _dim, HorizontalAlignment = HorizontalAlignment.Left,
+            VerticalAlignment = VerticalAlignment.Top, Margin = appIcon.Margin, IsHitTestVisible = false };
+        grid.Children.Add(appIcon); grid.Children.Add(fallback);
         var name = new TextBlock { FontSize = 12.5, TextTrimming = TextTrimming.CharacterEllipsis, Margin = new Thickness(43, 8, 44, 0) };
         var percent = new TextBlock { FontSize = 11, Foreground = _dim, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 9, 8, 0) };
         // The button supplies pointer capture to the existing island Scrubber.
@@ -88,9 +103,10 @@ public partial class MainWindow
         var slider = new Scrubber { Minimum = 0, Maximum = 100, Step = 1, Height = 26, Margin = new Thickness(0, 0, 0, 0) };
         track.Content = slider;
         grid.Children.Add(name); grid.Children.Add(percent); grid.Children.Add(track);
-        var row = new MixerRow(grid, mute, icon, name, percent, slider);
-        mute.Click += (_, e) => { e.Handled = true; ChangeMixer(row, null, !(row.Channel?.Muted ?? false)); };
+        var row = new MixerRow(grid, mute, icon, appIcon, fallback, name, percent, slider);
+        mute.Click += (_, e) => { e.Handled = true; ChangeMixer(row, null, !((row.Channel?.Muted ?? false) || (_mixerSnapshot?.Muted ?? false))); };
         slider.Changed += (_, _) => ChangeMixer(row, (float)slider.Value / 100, null);
+        track.LostMouseCapture += (_, _) => Dispatcher.BeginInvoke(() => { if (_panel == Panel.Mixer) RefreshMixer(); });
         track.Focusable = mute.Focusable = true;
         track.PreviewKeyDown += (_, e) =>
         {
@@ -109,15 +125,8 @@ public partial class MainWindow
         string[]? sessions = channel.Key == "master" ? null : channel.Sessions;
         bool success = _mixerWriter != null ? _mixerWriter(_mixerSnapshot.Device, sessions, level, muted)
             : _audio.SetMixer(_mixerSnapshot.Device, sessions, level, muted);
-        if (success)
-        {
-            row.Channel = channel with { Volume = level ?? channel.Volume, Muted = muted ?? channel.Muted };
-            row.Percent.Text = ((int)Math.Round(row.Channel.Volume * 100)) + "%";
-            row.Icon.Kind = row.Channel.Muted || row.Channel.Volume == 0 ? Glyph.Mute : Glyph.Loud;
-            row.Slider.Opacity = row.Channel.Muted ? 0.4 : 1;
-            row.Slider.Set(row.Channel.Volume * 100, false);
-            row.Mute.ToolTip = row.Channel.Muted ? "Включить звук" : "Выключить звук";
-        }
-        else { row.Slider.Set(channel.Volume * 100, false); Dispatcher.BeginInvoke(() => RefreshMixer()); }
+        // Read back ALL faders after every input, also after partial failures.
+        // Optimistically updating only the touched row hid the master/app coupling.
+        ReadAndRefreshMixer(true, success ? null : row);
     }
 }

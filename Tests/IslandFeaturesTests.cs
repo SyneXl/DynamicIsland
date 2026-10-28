@@ -137,16 +137,42 @@ static partial class Program
         string View() => Call(window, "TargetView")!.ToString()!;
         void Show(string name) { Call(window, "ShowPanel", Panel(name)); Pump(300); }
         void Click(string name) => ((Button)window.FindName(name)).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-        void Capture(string name) { Pump(350); Save(root, Path.Combine(output, name + ".png")); }
+        void Capture(string name)
+        {
+            Pump(350);
+            void Invalidate(DependencyObject node)
+            {
+                if (node is UIElement element) element.InvalidateVisual();
+                for (int i = 0; i < VisualTreeHelper.GetChildrenCount(node); i++) Invalidate(VisualTreeHelper.GetChild(node, i));
+            }
+            Invalidate(root); root.UpdateLayout(); Pump(120);
+            Save(root, Path.Combine(output, name + ".png"));
+        }
         try
         {
             Check(window.IsLoaded && new WindowInteropHelper(window).Handle != IntPtr.Zero, "new features are exercised in a real WPF HWND without live integrations");
             var snapshot = new MixerSnapshot("fixture-device", "Speakers", .65f, false, [
-                new("music", "Telegram", ["music-session"], .42f, false, true),
-                new("video", "MPC-BE", ["video-session"], .8f, true, false)]);
+                new("music", "Telegram", ["music-session"], .42f, false, true, Path.Combine(Environment.SystemDirectory, "imageres.dll")),
+                new("video", "MPC-BE", ["video-session"], .52f, true, false, Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "Windows Media Player", "wmplayer.exe"))]);
             var writes = new List<(string Device, string[]? Sessions, float? Level, bool? Muted)>();
             Set(window, "_mixerReader", (Func<MixerSnapshot?>)(() => snapshot));
-            Set(window, "_mixerWriter", (Func<string, string[]?, float?, bool?, bool>)((device, ids, level, muted) => { writes.Add((device, ids, level, muted)); return true; }));
+            Set(window, "_mixerWriter", (Func<string, string[]?, float?, bool?, bool>)((device, ids, level, muted) =>
+            {
+                writes.Add((device, ids, level, muted));
+                if (ids == null)
+                {
+                    float next = level ?? snapshot.Volume, previous = snapshot.Volume;
+                    snapshot = snapshot with { Volume = next, Muted = muted ?? (level == null ? snapshot.Muted : level == 0),
+                        Channels = snapshot.Channels.Select(c => c with { Volume = previous > 0 ? c.Volume * next / previous : 0 }).ToArray() };
+                }
+                else
+                {
+                    float next = Math.Max(snapshot.Volume, level ?? 0);
+                    snapshot = snapshot with { Volume = next, Muted = level > 0 ? false : snapshot.Muted, Channels = snapshot.Channels.Select(c => c.Sessions.Intersect(ids).Any()
+                        ? c with { Volume = level ?? c.Volume, Muted = muted ?? (level > 0 ? false : c.Muted) } : c).ToArray() };
+                }
+                return true;
+            }));
             Show("Player"); Click("HomeMixerButton"); Pump(200);
             Check(View() == "Mixer", "home volume control opens the mixer");
             Call(window, "MixerBack_Click", window, new RoutedEventArgs());
@@ -171,6 +197,9 @@ static partial class Program
             Check(Prop<TextBlock>(music, "Name").FontFamily.Equals(window.FontFamily), "mixer application names inherit the island SF Pro font");
             Check(((Digits)window.FindName("InfoVol")).FontFamily.Equals(window.FontFamily), "clickable home volume retains the island font");
             var slider = Prop<Scrubber>(music, "Slider");
+            Check(Prop<Image>(music, "AppIcon").Source is BitmapSource && Prop<Image>(music, "AppIcon").Visibility == Visibility.Visible,
+                "mixer row displays a real extracted app icon, not only a volume glyph");
+            Check(Prop<Icon>(rows["master"]!, "AppFallback").Visibility == Visibility.Visible, "master retains a distinct output icon");
             Check(slider.ActualWidth > 100 && slider.ActualHeight > 15, "mixer slider has a usable rendered hit area");
             slider.Set(25, false);
             typeof(Scrubber).GetField("Changed", Private)!.GetValue(slider)!.GetType().GetMethod("Invoke")!.Invoke(
@@ -180,6 +209,21 @@ static partial class Program
             Check(writes[^1].Muted == true && writes[^1].Sessions!.Single() == "music-session", "application mute does not touch master or other apps");
             Prop<Button>(rows["master"]!, "Mute").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             Check(writes[^1].Sessions == null && writes[^1].Muted == true, "master mute has a distinct explicit route");
+            Check(Prop<Scrubber>(music, "Slider").Opacity == .4, "endpoint mute is immediately reflected on every application row");
+            Call(window, "ChangeMixer", rows["master"]!, .5f, null!);
+            Check(Prop<TextBlock>(rows["master"]!, "Percent").Text == "50%"
+                && Math.Abs(slider.Value - .25 / .65 * 50) < .01,
+                "dragging master immediately refreshes app faders from Windows readback");
+            double otherWas = Prop<Scrubber>(rows["video"]!, "Slider").Value;
+            Call(window, "ChangeMixer", music, .8f, null!);
+            Check(Prop<TextBlock>(rows["master"]!, "Percent").Text == "80%" && Math.Abs(slider.Value - 80) < .01
+                && Math.Abs(Prop<Scrubber>(rows["video"]!, "Slider").Value - otherWas) < .01,
+                "raising an app above master refreshes master without moving unrelated faders");
+            var actualBeforeFailure = snapshot;
+            Set(window, "_mixerWriter", (Func<string, string[]?, float?, bool?, bool>)((_, _, _, _) => false));
+            Call(window, "ChangeMixer", music, .1f, null!);
+            Check(Math.Abs(slider.Value - actualBeforeFailure.Channels[0].Volume * 100) < .01,
+                "a rejected write keeps actual Windows values instead of optimistic fake success");
             Capture("mixer");
             var stable = rows["music"];
             snapshot = snapshot with { Channels = snapshot.Channels.Reverse().ToArray() }; Call(window, "RefreshMixer");
@@ -276,6 +320,17 @@ static partial class Program
                 Check(notice.Presented && notice.Pending && View() == "Notice", "updater availability enters the complete automatic notice pipeline when unobstructed");
             }
             finally { smoke.SetValue(null, true); }
+            // Read-only rendering against the actual user's output; no volume writes.
+            using var liveAudio = new AudioService();
+            if (liveAudio.ReadMixer() is { } liveMixer)
+            {
+                Set(window, "_mixerReader", (Func<MixerSnapshot?>)(() => liveMixer));
+                Set(window, "_mixerWriter", (Func<string, string[]?, float?, bool?, bool>)((_, _, _, _) => throw new Exception("Read-only preview must not write audio")));
+                Show("Mixer"); Call(window, "RefreshMixer"); Capture("mixer-live-readonly");
+                File.WriteAllText(Path.Combine(output, "live-mixer.json"), JsonSerializer.Serialize(new { master = liveMixer.Volume,
+                    muted = liveMixer.Muted, apps = liveMixer.Channels.Select(c => new { c.Name, c.Volume, c.Muted,
+                        iconLoaded = Prop<Image>(rows[c.Key]!, "AppIcon").Source != null }) }));
+            }
         }
         finally { window.Close(); }
     }
@@ -289,6 +344,8 @@ static partial class Program
         Check(player != null, "native mixer fixture activates its own shared-mode audio client");
         IntPtr format = IntPtr.Zero;
         object? render = null;
+        object? raw = null;
+        float rawWas = 1; bool muteWas = false;
         using var audio = new AudioService();
         MixerSnapshot? snapshot = null; MixerChannel? own = null;
         try
@@ -297,6 +354,9 @@ static partial class Program
             Check(player.Initialize(0, 0x80000, 10000000, 0, format, IntPtr.Zero) == 0, "native fixture creates a nonpersistent shared audio session");
             Guid renderId = typeof(IFeatureAudioRenderClient).GUID;
             Check(player.GetService(ref renderId, out render) == 0 && render is IFeatureAudioRenderClient, "native fixture obtains an owned render buffer");
+            Guid volumeId = typeof(ISimpleAudioVolume).GUID;
+            Check(player.GetService(ref volumeId, out raw) == 0 && raw is ISimpleAudioVolume, "native fixture obtains its own raw session volume");
+            ((ISimpleAudioVolume)raw!).GetMasterVolume(out rawWas); ((ISimpleAudioVolume)raw).GetMute(out muteWas);
             player.GetBufferSize(out uint frames);
             var buffer = (IFeatureAudioRenderClient)render!;
             Check(buffer.GetBuffer(frames, out _) == 0 && buffer.ReleaseBuffer(frames, 2) == 0 && player.Start() == 0,
@@ -308,9 +368,10 @@ static partial class Program
                 own = snapshot?.Channels.FirstOrDefault(c => c.Key.Equals(executable, StringComparison.OrdinalIgnoreCase));
             }
             Check(snapshot != null && own != null, "real Core Audio enumerates this test process's owned silent playback");
-            Check(audio.SetMixer(snapshot!.Device, own!.Sessions, .37f), "real Core Audio accepts volume change for owned test sessions");
+            float requested = snapshot!.Volume * .37f;
+            Check(audio.SetMixer(snapshot.Device, own!.Sessions, requested, true), "real Core Audio accepts absolute app volume within the existing master level");
             var changed = audio.ReadMixer()!.Channels.Single(c => c.Key == own.Key);
-            Check(Math.Abs(changed.Volume - .37f) < .005, "real mixer volume readback confirms the requested value");
+            Check(Math.Abs(changed.Volume - requested) < .005, "real mixer readback includes the actual endpoint scalar");
             Check(audio.SetMixer(snapshot.Device, own.Sessions, muted: true), "real Core Audio accepts mute for owned silent fixture");
             Check(audio.ReadMixer()!.Channels.Single(c => c.Key == own.Key).Muted, "real mixer mute readback confirms endpoint-independent app mute");
             Check(!audio.SetMixer(snapshot.Device, ["expired-instance-id"], .1f), "expired session identity never targets another live application");
@@ -318,11 +379,19 @@ static partial class Program
         finally
         {
             bool restored = false;
-            try { if (snapshot != null && own != null) restored = audio.SetMixer(snapshot.Device, own.Sessions, own.Volume, own.Muted); }
+            try
+            {
+                if (raw is ISimpleAudioVolume volume)
+                {
+                    Guid context = Guid.Empty;
+                    restored = volume.SetMasterVolume(rawWas, ref context) == 0 && volume.SetMute(muteWas, ref context) == 0;
+                }
+            }
             finally
             {
                 player?.Stop();
                 if (render != null) Marshal.ReleaseComObject(render);
+                if (raw != null) Marshal.ReleaseComObject(raw);
                 if (player != null) Marshal.ReleaseComObject(player);
                 if (format != IntPtr.Zero) Marshal.FreeCoTaskMem(format);
                 Pump(100);
