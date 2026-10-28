@@ -60,11 +60,25 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           $repo = 'SyneXl/DynamicIsland'
-          gh release create $env:TAG out/DynamicIsland.exe out/SHA256SUMS.txt --repo $repo --verify-tag --draft --title "Dynamic Island $env:TAG" --notes-file "docs/releases/$env:TAG.md"
-          if ($LASTEXITCODE -ne 0) { throw 'Draft release failed; existing releases are never overwritten.' }
-          $release = gh api "repos/$repo/releases/tags/$env:TAG" | ConvertFrom-Json
+          $metadata = gh release view $env:TAG --repo $repo --json apiUrl,isDraft 2>$null
+          if ($LASTEXITCODE -eq 0) {
+            $metadata = $metadata | ConvertFrom-Json
+            if (!$metadata.isDraft) { throw 'A published release is immutable; use a new version.' }
+          } else {
+            gh release create $env:TAG out/DynamicIsland.exe out/SHA256SUMS.txt --repo $repo --verify-tag --draft --title "Dynamic Island $env:TAG" --notes-file "docs/releases/$env:TAG.md"
+            if ($LASTEXITCODE -ne 0) { throw 'Draft creation failed.' }
+            $metadata = gh release view $env:TAG --repo $repo --json apiUrl,isDraft | ConvertFrom-Json
+            if ($LASTEXITCODE -ne 0) { throw 'Draft lookup failed.' }
+          }
+          # The by-tag REST endpoint does not expose drafts. Resolve the draft
+          # with gh first, then read it by numeric REST ID (apiUrl).
+          $release = gh api $metadata.apiUrl | ConvertFrom-Json
+          if ($LASTEXITCODE -ne 0) { throw 'Draft metadata could not be read.' }
           $asset = $release.assets | Where-Object name -eq 'DynamicIsland.exe'
           $digest = 'sha256:' + (Get-FileHash out/DynamicIsland.exe -Algorithm SHA256).Hash.ToLowerInvariant()
           if ($asset.digest -ne $digest) { throw 'GitHub asset digest does not match the tested EXE; release remains draft.' }
+          $sums = $release.assets | Where-Object name -eq 'SHA256SUMS.txt'
+          $sumsDigest = 'sha256:' + (Get-FileHash out/SHA256SUMS.txt -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($sums.digest -ne $sumsDigest) { throw 'Checksums asset is missing or differs; release remains draft.' }
           gh release edit $env:TAG --repo $repo --draft=false --latest
           if ($LASTEXITCODE -ne 0) { throw 'Release publication failed.' }

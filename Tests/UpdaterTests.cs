@@ -131,7 +131,8 @@ static partial class Program
             foreach (string variant in new[] { "success", "real-helper", "parent-wait", "bad-hash", "changed-target", "rollback" })
             {
                 string test = Path.Combine(output, "Каталог с пробелами", variant); Directory.CreateDirectory(test);
-                string target = Path.Combine(test, "DynamicIsland.exe"); File.Copy(sourceExe, target, true);
+                string target = Path.Combine(test, "DynamicIsland.exe");
+                File.Copy(Environment.GetEnvironmentVariable("ISLAND_OTA_BASELINE") ?? sourceExe, target, true);
                 // Change a harmless appended overlay byte so restoration is observable.
                 await using (var stream = new FileStream(target, FileMode.Append)) await stream.WriteAsync(new byte[] { 42 });
                 string original = UpdateHandoff.Hash(target);
