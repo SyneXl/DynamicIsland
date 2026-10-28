@@ -76,6 +76,8 @@ static partial class Program
             var updateButton = (Button)window.FindName("UpdateButton");
             Check(updatePage.Height < 440 && updateButton.TransformToAncestor(updatePage).Transform(new Point(0, updateButton.ActualHeight)).Y <= updatePage.ActualHeight,
                 "long release notes never push the update button outside the island");
+            Check(((Spring)typeof(MainWindow).GetField("_height", Private)!.GetValue(window)!).Target == updatePage.Height,
+                "outer pill follows the measured update page instead of clipping it to 150 pixels");
             Check((double)typeof(MainWindow).GetProperty("UpdateNotesOverflow", Private)!.GetValue(window)! > 0, "long update notes have a real scroll range");
             Save(root, Path.Combine(output, "update-available.png"));
             Call(window, "ScrollUpdateNotes", 100);
