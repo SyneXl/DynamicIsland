@@ -17,6 +17,7 @@ sealed class ShelfTile : Grid
     readonly Border _frame;
     readonly ScaleTransform _frameScale = new(1, 1);
     readonly Border _cross;
+    readonly TextBlock _name;
 
     public ShelfTile(Shelf.Item item)
     {
@@ -41,7 +42,7 @@ sealed class ShelfTile : Grid
         RenderOptions.SetBitmapScalingMode(_frame, BitmapScalingMode.HighQuality);
         Children.Add(_frame);
 
-        var name = new TextBlock
+        _name = new TextBlock
         {
             Text = item.Name,
             FontSize = 10.5,
@@ -50,8 +51,8 @@ sealed class ShelfTile : Grid
             TextAlignment = TextAlignment.Center,
             Margin = new Thickness(0, 5, 0, 0),
         };
-        SetRow(name, 1);
-        Children.Add(name);
+        SetRow(_name, 1);
+        Children.Add(_name);
 
         _cross = new Border
         {
@@ -88,6 +89,13 @@ sealed class ShelfTile : Grid
 
     public void ShowPicture()
     {
+        _name.Text = Item.Name;
+        if (Item.Text != null)
+        {
+            _frame.Child = new TextBlock { Text = new string(Item.Text.Take(180).ToArray()), TextWrapping = TextWrapping.Wrap, FontSize = 8,
+                Margin = new Thickness(7), Foreground = Brushes.White, IsHitTestVisible = false };
+            return;
+        }
         if (Item.Picture is not { } picture) return;
         FrameworkElement shown = Item.IsPhoto
             ? new Border

@@ -13,9 +13,9 @@ namespace DynamicIsland;
 
 public partial class MainWindow : Window
 {
-    enum View { Idle, Media, CinemaMedia, Timer, Record, Volume, Charge, Headset, Focus, Toast, Notice, MediaBig, IdleBig, TimerBig, TimerSet, RecordBig, RecordSet, Menu, Settings, Look, Shelf, Weather, Place, Qr, Update, Lyrics, Loading, Codex, MenuLayout, Zapret, ZapretFolders, ZapretStrategies, Throne, ThroneGroups, ThroneServers }
+    enum View { Idle, Media, CinemaMedia, Timer, Record, Volume, Charge, Headset, Focus, Toast, Notice, MediaBig, IdleBig, TimerBig, TimerSet, RecordBig, RecordSet, Menu, Settings, Look, Shelf, Weather, Place, Qr, Update, Lyrics, Loading, Codex, MenuLayout, Zapret, ZapretFolders, ZapretStrategies, Throne, ThroneGroups, ThroneServers, Mixer, ShelfNote }
 
-    enum Panel { None, Player, Timer, TimerSet, Record, Menu, Settings, Look, Shelf, Weather, Place, Qr, Update, Lyrics, Codex, MenuLayout, Zapret, ZapretFolders, ZapretStrategies, Throne, ThroneGroups, ThroneServers }
+    enum Panel { None, Player, Timer, TimerSet, Record, Menu, Settings, Look, Shelf, Weather, Place, Qr, Update, Lyrics, Codex, MenuLayout, Zapret, ZapretFolders, ZapretStrategies, Throne, ThroneGroups, ThroneServers, Mixer, ShelfNote }
 
     readonly record struct PillShape(double Width, double Height, double Radius);
 
@@ -50,6 +50,8 @@ public partial class MainWindow : Window
         [View.ZapretFolders] = new(420, 466, 34),
         [View.ZapretStrategies] = new(380, 432, 34),
         [View.Shelf] = new(380, 136, 34),
+        [View.ShelfNote] = new(380, 276, 34),
+        [View.Mixer] = new(360, 260, 34),
         [View.Weather] = new(340, 190, 34),
         [View.Place] = new(320, 200, 34),
         [View.Qr] = new(320, 104, 34),
@@ -73,7 +75,7 @@ public partial class MainWindow : Window
         [View.MediaBig] = new(20, 20, 64, 22, 52, 38, 26, 1),
     };
 
-    static readonly View[] MenuPages = [View.Settings, View.Look, View.TimerSet, View.TimerBig, View.RecordSet, View.RecordBig, View.Shelf, View.Weather, View.Qr, View.Codex, View.Zapret, View.Throne];
+    static readonly View[] MenuPages = [View.Settings, View.Look, View.TimerSet, View.TimerBig, View.RecordSet, View.RecordBig, View.Shelf, View.Weather, View.Qr, View.Codex, View.Zapret, View.Throne, View.Mixer];
 
     static readonly View[] SettingsPages = [View.Update, View.Lyrics];
 
@@ -156,6 +158,8 @@ public partial class MainWindow : Window
             [View.ZapretFolders] = ZapretFoldersView,
             [View.ZapretStrategies] = ZapretStrategiesView,
             [View.Shelf] = ShelfView,
+            [View.ShelfNote] = ShelfNoteView,
+            [View.Mixer] = MixerView,
             [View.Weather] = WeatherView,
             [View.Place] = PlaceView,
             [View.Qr] = QrView,
@@ -167,7 +171,7 @@ public partial class MainWindow : Window
         _spotSprings = [_coverLeft, _coverTop, _coverSize, _barsRight, _barsCenterY, _barsWidth, _barsHeight, _barsOpen];
         _springs =
         [
-            _width, _height, _radius, _scale, _offsetY, _userScale, _topGap, _bubbleSplit, _bubbleScale, _bubbleRecord, _bubbleTimer, _bubbleShelf, _shelfBubbleWidth,
+            _width, _height, _radius, _scale, _offsetY, _userScale, _topGap, _bubbleSplit, _bubbleScale, _bubbleRecord, _bubbleTimer, _bubbleShelf, _bubbleUpdate, _shelfBubbleWidth,
             _shelfScroll, _lookScroll, _updateNotesScroll, _volumeOvershoot, _leanX, _coverScale, _coverSnapX, _coverSnapY, _lyricSnapX, _lyricSnapY, .. _spotSprings,
         ];
         _timerTint = new SolidColorBrush(_orange.Color);
@@ -196,6 +200,7 @@ public partial class MainWindow : Window
         _lyrics.Changed += OnLyricsChanged;
         _updater.Changed += RefreshUpdatePage;
         Closed += (_, _) => _updater.Dispose();
+        Closed += (_, _) => _audio.Dispose();
         _network = new NetworkService(Dispatcher);
         _network.Changed += OnNetworkChanged;
         _fullscreenVideo = new FullscreenVideoService(Dispatcher, _media.IsVideoForProcessAsync);
@@ -221,6 +226,8 @@ public partial class MainWindow : Window
         _ticker.Tick += (_, _) => TickSafely();
         Loaded += OnLoaded;
         Deactivated += OnDeactivated;
+        PreviewKeyDown += Shelf_PreviewKeyDown;
+        Closing += (_, e) => { if (_panel == Panel.ShelfNote && !CommitShelfNote()) e.Cancel = true; };
     }
 
     void PrepareViews()
@@ -384,6 +391,7 @@ public partial class MainWindow : Window
     {
         _ticks++;
         Safely(PollVolume);
+        Safely(TryAnnounceUpdate);
         if (_ticks % HeadsetReadTicks == 1) Safely(() => ReadHeadset(_audio.Device));
         Safely(() => UpdateLyric());
         Safely(UpdateTimer);
@@ -397,6 +405,7 @@ public partial class MainWindow : Window
         {
             Safely(UpdateClock);
             if (_view == View.Codex) Safely(SyncCodex);
+            if (_view == View.Mixer) Safely(RefreshMixer);
             if (_view is View.Throne or View.ThroneGroups or View.ThroneServers) PollThrone();
             if ((_view is View.Zapret or View.ZapretFolders or View.ZapretStrategies || _view == View.Menu && _menuButtons["zapret"].Visibility == Visibility.Visible)
                 && !_zapretBusy && Environment.TickCount64 - _zapretStatusAt > 2000) _ = RefreshZapretAsync();
@@ -427,6 +436,8 @@ public partial class MainWindow : Window
             Panel.Update => View.Update,
             Panel.Lyrics => View.Lyrics,
             Panel.Shelf => View.Shelf,
+            Panel.ShelfNote => View.ShelfNote,
+            Panel.Mixer => View.Mixer,
             Panel.Weather => View.Weather,
             Panel.Place => View.Place,
             Panel.Qr => View.Qr,
@@ -475,6 +486,8 @@ public partial class MainWindow : Window
         if (target == View.Place) BeginTyping();
         else if (previous == View.Place) EndTyping();
         if (previous == View.ThroneServers) EndThroneTyping();
+        if (target is View.Shelf or View.ShelfNote) BeginShelfTyping(target == View.ShelfNote);
+        else if (previous is View.Shelf or View.ShelfNote) EndShelfTyping();
         MoveMediaSpot(previous, target, to);
         UpdateTargets();
     }
@@ -509,6 +522,7 @@ public partial class MainWindow : Window
         parent == View.Menu && MenuPages.Contains(page) || parent == View.Settings && SettingsPages.Contains(page)
         || parent == View.Weather && WeatherPages.Contains(page)
         || parent == View.Look && page == View.MenuLayout
+        || parent == View.Shelf && page == View.ShelfNote
         || parent == View.Zapret && page is View.ZapretFolders or View.ZapretStrategies
         || parent == View.Throne && page is View.ThroneGroups or View.ThroneServers;
 
@@ -524,6 +538,8 @@ public partial class MainWindow : Window
         View.Look => PillShapes[view] with { Height = LookView.Height },
         View.Menu => PillShapes[view] with { Height = MenuView.Height },
         View.MenuLayout => PillShapes[view] with { Height = MenuLayoutView.Height },
+        View.Shelf => PillShapes[view] with { Height = ShelfView.Height },
+        View.Mixer => PillShapes[view] with { Height = MixerView.Height },
         View.Zapret => PillShapes[view] with { Height = ZapretView.Height },
         View.Throne => PillShapes[view] with { Height = ThroneView.Height },
         View.ThroneGroups => PillShapes[view] with { Height = ThroneGroupsView.Height },
@@ -536,6 +552,7 @@ public partial class MainWindow : Window
     {
         if (force)
         {
+            if (_panel == Panel.ShelfNote && !CommitShelfNote()) return;
             EndMenuReorder(false);
             CancelGrab();
             CancelScrub();
@@ -550,6 +567,12 @@ public partial class MainWindow : Window
 
     void EndTransient()
     {
+        if (_transientView == View.Volume && VolumeView.IsMouseOver
+            || _transientView == View.Notice && _noticeIsUpdate && NoticeView.IsMouseOver)
+        {
+            _transientTimeout.Start(TimeSpan.FromSeconds(0.5));
+            return;
+        }
         _transientView = null;
         SilenceAlarm();
         UpdateView();
@@ -557,6 +580,8 @@ public partial class MainWindow : Window
 
     void SelectPanel(Panel panel)
     {
+        if (_panel == Panel.ShelfNote && panel != Panel.ShelfNote && !CommitShelfNote()) return;
+        if (panel == Panel.Update) _updateAnnouncement.Consume();
         if (panel != Panel.MenuLayout) EndMenuReorder(false);
         if (panel != Panel.Player) CancelScrub();
         _panel = panel;

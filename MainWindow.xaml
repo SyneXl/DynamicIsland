@@ -2,7 +2,7 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:local="clr-namespace:DynamicIsland"
-        Title="Dynamic Island" Width="680" Height="622"
+        Title="Dynamic Island" Width="1000" Height="622"
         WindowStyle="None" AllowsTransparency="True" Background="Transparent"
         ShowInTaskbar="False" ShowActivated="False" Topmost="True" ResizeMode="NoResize"
         Focusable="False" UseLayoutRounding="True"
@@ -738,7 +738,10 @@
                         <ColumnDefinition Width="162"/>
                         <ColumnDefinition/>
                     </Grid.ColumnDefinitions>
-                    <local:Icon x:Name="VolIcon" Kind="Loud" Width="17" Height="17"/>
+                    <Button x:Name="VolumeMixerButton" Style="{StaticResource IconButton}" Width="38" Height="32"
+                            Click="MixerOpen_Click" ToolTip="Микшер" AutomationProperties.Name="Открыть микшер">
+                        <local:Icon x:Name="VolIcon" Kind="Loud" Width="17" Height="17"/>
+                    </Button>
                     <Grid x:Name="VolTrack" Grid.Column="1" Height="5" VerticalAlignment="Center">
                         <Grid.RenderTransform>
                             <ScaleTransform x:Name="VolStretch"/>
@@ -941,12 +944,15 @@
                             <local:Digits x:Name="InfoWeather" FontSize="13" FontWeight="SemiBold" Margin="8,0,0,0"
                                           VerticalAlignment="Center"/>
                         </StackPanel>
-                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                        <Button x:Name="HomeMixerButton" Style="{StaticResource IconButton}" Width="Auto" Height="24" HorizontalAlignment="Right" Padding="3,4"
+                                Click="MixerOpen_Click" ToolTip="Микшер" AutomationProperties.Name="Открыть микшер">
+                        <StackPanel Orientation="Horizontal">
                             <local:Icon x:Name="InfoVolIcon" Kind="Loud" Width="16" Height="16"
                                         Fill="{StaticResource Dim}" VerticalAlignment="Center"/>
                             <local:Digits x:Name="InfoVol" Text="—" FontSize="13" FontWeight="SemiBold" Margin="8,0,0,0"
                                           VerticalAlignment="Center"/>
                         </StackPanel>
+                        </Button>
                         <StackPanel x:Name="InfoHeadsetRow" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,10,0,0"
                                     Visibility="Collapsed">
                             <local:Icon x:Name="InfoHeadsetIcon" Kind="Headphones" Width="16" Height="16"
@@ -1113,6 +1119,13 @@
                                     <local:Digits x:Name="MenuShelf" Foreground="{StaticResource Dim}" VerticalAlignment="Center"/>
                                     <local:Icon Style="{StaticResource RowChevron}" Margin="8,1,0,0"/>
                                 </StackPanel>
+                            </Grid>
+                        </Button>
+                        <Button Style="{StaticResource RowButton}" Tag="mixer" Click="MixerOpen_Click">
+                            <Grid>
+                                <local:Icon Style="{StaticResource RowIcon}" Kind="Bars"/>
+                                <TextBlock Style="{StaticResource RowLabel}" Text="Микшер"/>
+                                <local:Icon Style="{StaticResource RowChevron}"/>
                             </Grid>
                         </Button>
                         <Button Style="{StaticResource RowButton}" Tag="weather" Click="WeatherRow_Click">
@@ -1808,11 +1821,53 @@
                     </Grid>
                 </Grid>
 
-                <Grid x:Name="ShelfView" Width="380" Height="136" HorizontalAlignment="Center" VerticalAlignment="Top">
-                    <Grid Height="22" Margin="22,12,16,0" VerticalAlignment="Top">
+                <Grid x:Name="MixerView" Width="360" Height="260" HorizontalAlignment="Center" VerticalAlignment="Top">
+                    <StackPanel Margin="14,8,14,12">
+                        <Button Style="{StaticResource BackButton}" Content="МИКШЕР" Click="MixerBack_Click"/>
+                        <ScrollViewer x:Name="MixerScroll" Style="{StaticResource MenuScrollViewer}" Height="190"
+                                      VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" PreviewMouseWheel="MenuScroll_PreviewMouseWheel">
+                            <StackPanel x:Name="MixerRows"/>
+                        </ScrollViewer>
+                        <TextBlock x:Name="MixerEmpty" Text="Нет приложений со звуком" FontSize="12" Foreground="{StaticResource Dim}"
+                                   HorizontalAlignment="Center" Margin="0,8,0,0" Visibility="Collapsed"/>
+                        <TextBlock x:Name="MixerUnavailable" Text="Нет устройства вывода" FontSize="12" Foreground="{StaticResource Dim}"
+                                   HorizontalAlignment="Center" Margin="0,12,0,0" Visibility="Collapsed"/>
+                    </StackPanel>
+                </Grid>
+
+                <Grid x:Name="ShelfNoteView" Width="380" Height="276" HorizontalAlignment="Center" VerticalAlignment="Top">
+                    <Grid Margin="18,8,18,16">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="34"/>
+                            <RowDefinition/>
+                            <RowDefinition Height="28"/>
+                            <RowDefinition Height="18"/>
+                        </Grid.RowDefinitions>
+                        <Button Style="{StaticResource BackButton}" Content="ЗАМЕТКА" Click="ShelfNoteDone_Click" HorizontalAlignment="Left"/>
+                        <Button Style="{StaticResource ChipButton}" Width="102" Height="26" HorizontalAlignment="Right" Content="Копировать"
+                                Click="ShelfNoteCopy_Click" ToolTip="Скопировать текст"/>
+                        <ScrollViewer x:Name="ShelfNoteScroll" Grid.Row="1" Style="{StaticResource MenuScrollViewer}" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                            <TextBox x:Name="ShelfNoteEditor" AcceptsReturn="True" AcceptsTab="True" TextWrapping="Wrap" MinHeight="145"
+                                     MaxLength="1000000" Background="Transparent" Foreground="White" CaretBrush="White" BorderThickness="0"
+                                     FontSize="13" Padding="6,8" ContextMenu="{x:Null}" SelectionBrush="#557D7AFF" AutomationProperties.Name="Текст заметки"/>
+                        </ScrollViewer>
+                        <Button Grid.Row="2" Style="{StaticResource ChipButton}" Content="Готово" Height="28" Width="90"
+                                Click="ShelfNoteDone_Click" HorizontalAlignment="Right" ToolTip="Сохранить (Ctrl+Enter)"/>
+                        <TextBlock x:Name="ShelfNoteError" Grid.Row="3" Foreground="{StaticResource Red}" FontSize="11" VerticalAlignment="Center"/>
+                    </Grid>
+                </Grid>
+
+                <Grid x:Name="ShelfView" Width="380" Height="136" HorizontalAlignment="Center" VerticalAlignment="Top" Focusable="True">
+                    <Grid Height="24" Margin="22,12,16,0" VerticalAlignment="Top">
                         <TextBlock Style="{StaticResource Caption}" Text="ПОЛКА" VerticalAlignment="Center"/>
                         <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
-                            <Button Style="{StaticResource ChipButton}" Width="22" Height="22" Margin="0,0,6,0" Click="ShelfAdd_Click">
+                            <Button x:Name="ShelfPasteButton" Style="{StaticResource ChipButton}" Width="26" Height="24" Margin="0,0,5,0" Click="ShelfPaste_Click" ToolTip="Вставить (Ctrl+V)" AutomationProperties.Name="Вставить из буфера">
+                                <local:Icon Kind="Tray" Width="13" Height="13" Fill="{StaticResource Dim}"/>
+                            </Button>
+                            <Button x:Name="ShelfNoteButton" Style="{StaticResource ChipButton}" Width="26" Height="24" Margin="0,0,5,0" Click="ShelfNoteNew_Click" ToolTip="Новая заметка" AutomationProperties.Name="Новая заметка">
+                                <local:Icon Kind="Lines" Width="13" Height="13" Fill="{StaticResource Dim}"/>
+                            </Button>
+                            <Button Style="{StaticResource ChipButton}" Width="26" Height="24" Margin="0,0,5,0" Click="ShelfAdd_Click" ToolTip="Добавить файлы" AutomationProperties.Name="Добавить файлы">
                                 <local:Icon Kind="Plus" Width="12" Height="12" Fill="{StaticResource Dim}"/>
                             </Button>
                             <Button x:Name="ShelfClear" Style="{StaticResource ChipButton}" Height="22" Margin="0" FontSize="11"
@@ -1830,7 +1885,7 @@
                             <local:Icon Kind="Tray" Width="22" Height="22" Fill="{StaticResource Dim}"/>
                             <TextBlock x:Name="ShelfHintText" Text="Перетащите сюда файлы" FontSize="12" Foreground="{StaticResource Dim}"
                                        Margin="0,6,0,0" HorizontalAlignment="Center"/>
-                            <TextBlock x:Name="ShelfHintMore" Text="или нажмите, чтобы выбрать" FontSize="11" Foreground="{StaticResource Faint}"
+                            <TextBlock x:Name="ShelfHintMore" Text="Перетащи сюда или вставь из буфера" FontSize="11" Foreground="{StaticResource Faint}"
                                        Margin="0,1,0,0" HorizontalAlignment="Center"/>
                         </StackPanel>
                     </Button>
@@ -1851,6 +1906,8 @@
                             </StackPanel>
                         </Canvas>
                     </Border>
+                    <TextBlock x:Name="ShelfStatus" FontSize="11" Foreground="{StaticResource Dim}" HorizontalAlignment="Center"
+                               VerticalAlignment="Bottom" Margin="14,0,14,2" Visibility="Collapsed"/>
                 </Grid>
 
                 <Grid x:Name="WeatherView" Width="340" Height="190" HorizontalAlignment="Center" VerticalAlignment="Top">
@@ -2005,6 +2062,9 @@
                     <local:Digits x:Name="BubbleShelfText" Text="0" FontSize="12.5" FontWeight="SemiBold"
                                   VerticalAlignment="Center" Margin="4,0,0,0"/>
                 </StackPanel>
+                <Grid x:Name="BubbleUpdate" Width="38" HorizontalAlignment="Right" ToolTip="Доступно обновление">
+                    <local:Icon Kind="Update" Width="17" Height="17" Fill="{StaticResource Indigo}"/>
+                </Grid>
             </Grid>
         </Border>
     </Grid>

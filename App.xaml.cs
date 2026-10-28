@@ -63,7 +63,13 @@ public partial class App : Application
                     && window.FindName("ZapretStrategyRows") != null
                     && window.FindName("ThroneView") is FrameworkElement { Height: > 0 }
                     && window.FindName("ThroneGroupRows") != null
-                    && window.FindName("ThroneServerRows") != null;
+                    && window.FindName("ThroneServerRows") != null
+                    && window.FindName("MixerView") is FrameworkElement { Height: > 0 }
+                    && window.FindName("HomeMixerButton") != null
+                    && window.FindName("VolumeMixerButton") != null
+                    && window.FindName("ShelfNoteEditor") != null
+                    && window.FindName("ShelfPasteButton") != null
+                    && window.FindName("BubbleUpdate") != null;
                 File.WriteAllText(result, JsonSerializer.Serialize(new { ready, ui = "WPF", externalServices = false,
                     version = Updater.CurrentVersion.ToString(), updateRepository = Updater.Repository }));
                 window.Close();

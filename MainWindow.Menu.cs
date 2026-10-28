@@ -138,6 +138,7 @@ public partial class MainWindow
 
     void RefreshUpdatePage()
     {
+        ObserveUpdateAnnouncement();
         Updater.Stage stage = _updater.State;
         bool loading = stage == Updater.Stage.Loading, found = loading || stage == Updater.Stage.Available;
         Version version = found ? _updater.LatestVersion! : Updater.CurrentVersion;

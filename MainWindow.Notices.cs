@@ -16,6 +16,7 @@ public partial class MainWindow
         Action? open = null)
     {
         if (_ringing && !force) return;
+        _noticeIsUpdate = false;
 
         bool shown = _view == View.Notice;
         Color color = tint.Color;

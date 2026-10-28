@@ -2,7 +2,7 @@ using System.Runtime.InteropServices;
 
 namespace DynamicIsland;
 
-sealed class AudioService
+sealed partial class AudioService : IDisposable
 {
     const uint HeadphonesFormFactor = 3, HeadsetFormFactor = 5;
     const int SessionExpired = 2;
@@ -193,4 +193,6 @@ sealed class AudioService
         _volume = null;
         _meter = null;
     }
+
+    public void Dispose() => ReleaseDevice();
 }

@@ -14,7 +14,7 @@ public partial class MainWindow
     const double VolumeChangeThreshold = 0.004;
     const float VolumeUnknown = -1, VolumeMax = 0.999f, VolumeMin = 0.001f;
     const double QuietVolumeBelow = 0.34, MidVolumeBelow = 0.67;
-    const double VolumeHudSeconds = 1.6, ChargeSeconds = 3, FocusSeconds = 2.2;
+    const double VolumeHudSeconds = 3, ChargeSeconds = 3, FocusSeconds = 2.2;
     const double ChargeFillWidth = 20;
     const int HeadsetLowPercent = 20, HeadsetCriticalPercent = 10;
     const string MutedLabel = "выкл";

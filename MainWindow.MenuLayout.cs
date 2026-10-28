@@ -267,6 +267,8 @@ public partial class MainWindow
         {
             View.MenuLayout => MenuEditorScroll,
             View.Menu => MenuScroll,
+            View.Mixer => MixerScroll,
+            View.ShelfNote => ShelfNoteScroll,
             View.Zapret => ZapretScroll,
             View.ZapretFolders => ZapretFoldersScroll,
             View.ZapretStrategies => ZapretStrategiesScroll,

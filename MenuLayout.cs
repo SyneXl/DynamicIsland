@@ -14,6 +14,7 @@ sealed class MenuLayout
         new("zapret", "Zapret", Glyph.Shield),
         new("throne", "Throne", Glyph.Vpn, DefaultVisible: false),
         new("shelf", "Полка", Glyph.Tray),
+        new("mixer", "Микшер", Glyph.Bars, DefaultVisible: false),
         new("weather", "Погода", Glyph.CloudSun),
         new("qr", "QR-код с экрана", Glyph.Qr),
         new("codex", "Codex", Glyph.Sparkle),
@@ -52,6 +53,7 @@ sealed class MenuLayout
                 var added = new MenuEntry(definition.Id, DefaultVisible(definition), definition.Id == "throne");
                 if (definition.Id == "zapret" && obs >= 0) result.Insert(obs + 1, added);
                 else if (definition.Id == "throne" && zapret >= 0) result.Insert(zapret + 1, added);
+                else if (definition.Id == "mixer" && result.FindIndex(e => e.Id == "shelf") is int shelf && shelf >= 0) result.Insert(shelf + 1, added);
                 else result.Add(added);
             }
         Entries = result.AsReadOnly();

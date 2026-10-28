@@ -242,6 +242,8 @@ static class Settings
         set => Write(nameof(Shelf), value, RegistryValueKind.MultiString);
     }
 
+    public static bool TrySetShelf(string[] paths) => Write(nameof(Shelf), paths, RegistryValueKind.MultiString);
+
     static LyricSource Known(LyricSource sources) => (sources & LyricSource.All) == 0 ? LyricSource.Usual : sources & LyricSource.All;
 
     static Place? ReadPlace() =>

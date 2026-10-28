@@ -14,7 +14,7 @@ public partial class MainWindow
     const double BubbleGap = 7;
     const double BubbleTuckFactor = 1.6;
     const double BubbleVisibleSplit = 0.01, BubbleClickableSplit = 0.75;
-    const double RecordBubbleWidth = 78, TimerBubbleWidth = 78, ShelfBubbleWidth = 54;
+    const double RecordBubbleWidth = 78, TimerBubbleWidth = 78, ShelfBubbleWidth = 54, UpdateBubbleWidth = 38;
     const double BubbleOverlap = 11;
     const double ShelfBubblePadding = 13, ShelfBubblePaddingWithTimer = 10;
     const double MinViewScale = 0.5, MaxViewScale = 1.15;
@@ -30,6 +30,7 @@ public partial class MainWindow
     readonly Spring _bubbleSplit = new(0), _bubbleScale = new(1, 320, 20);
     readonly Spring _lyricSnapX = new(0, 200, 28), _lyricSnapY = new(0, 200, 28);
     readonly Spring _bubbleRecord = new(0, 260, 24), _bubbleTimer = new(0, 260, 24), _bubbleShelf = new(0, 260, 24), _shelfBubbleWidth = new(ShelfBubbleWidth, 260, 24);
+    readonly Spring _bubbleUpdate = new(0, 260, 24);
     readonly BlurEffect _motionBlur = new() { Radius = 0, RenderingBias = RenderingBias.Performance };
     readonly FrameLoop _shapeLoop;
     readonly Glass _glass;
@@ -67,7 +68,8 @@ public partial class MainWindow
     {
         bool record = _obs.Recording && _view != View.Record;
         bool timer = _countdown.IsActive && _view != View.Timer, shelf = _shelf.Items.Count > 0;
-        bool split = compact && (record || timer || shelf);
+        bool update = UpdateBubblePending;
+        bool split = compact && (record || timer || shelf || update);
         _bubbleSplit.Target = split ? 1 : 0;
         if (compact) _bubbleSplit.Tune(140, 17);
         else _bubbleSplit.Tune(300, 30);
@@ -76,12 +78,14 @@ public partial class MainWindow
         _bubbleRecord.Target = record ? 1 : 0;
         _bubbleTimer.Target = timer ? 1 : 0;
         _bubbleShelf.Target = shelf ? 1 : 0;
+        _bubbleUpdate.Target = update ? 1 : 0;
         if (shelf) _shelfBubbleWidth.Target = MeasureShelfBubble();
         if (_bubbleSplit.Value >= BarelyVisible) return;
 
         _bubbleRecord.Snap(_bubbleRecord.Target);
         _bubbleTimer.Snap(_bubbleTimer.Target);
         _bubbleShelf.Snap(_bubbleShelf.Target);
+        _bubbleUpdate.Snap(_bubbleUpdate.Target);
         _shelfBubbleWidth.Snap(_shelfBubbleWidth.Target);
     }
 
@@ -230,8 +234,10 @@ public partial class MainWindow
     {
         double split = _bubbleSplit.Value, bubble = Math.Max(_bubbleScale.Value, MinScale);
         double record = Math.Max(_bubbleRecord.Value, 0), timer = Math.Max(_bubbleTimer.Value, 0), shelf = Math.Max(_bubbleShelf.Value, 0);
-        double seams = record * timer + timer * shelf + record * shelf * (1 - Math.Clamp(timer, 0, 1));
-        double wide = Math.Max(RecordBubbleWidth * record + TimerBubbleWidth * timer + _shelfBubbleWidth.Value * shelf - BubbleOverlap * seams, Bubble.Height);
+        double update = Math.Clamp(_bubbleUpdate.Value, 0, 1);
+        double seams = record * timer + timer * shelf + record * shelf * (1 - Math.Clamp(timer, 0, 1))
+            + update * (1 - (1 - Math.Clamp(record, 0, 1)) * (1 - Math.Clamp(timer, 0, 1)) * (1 - Math.Clamp(shelf, 0, 1)));
+        double wide = Math.Max(RecordBubbleWidth * record + TimerBubbleWidth * timer + _shelfBubbleWidth.Value * shelf + UpdateBubbleWidth * update - BubbleOverlap * seams, Bubble.Height);
         bool apart = split > BubbleVisibleSplit;
         Bubble.SetVisible(apart);
         Bubble.Width = wide;
@@ -239,12 +245,15 @@ public partial class MainWindow
         BubbleTimer.Opacity = Math.Clamp(timer * 2 - 1, 0, 1);
         BubbleTimer.Margin = new Thickness((RecordBubbleWidth - BubbleOverlap) * record, 0, 0, 0);
         BubbleShelf.Opacity = Math.Clamp(shelf * 2 - 1, 0, 1);
-        BubbleShelf.Margin = new Thickness(0, 0, ShelfBubblePadding + (ShelfBubblePaddingWithTimer - ShelfBubblePadding) * Math.Clamp(Math.Max(timer, record), 0, 1), 0);
+        BubbleShelf.Margin = new Thickness(0, 0, ShelfBubblePadding + (ShelfBubblePaddingWithTimer - ShelfBubblePadding) * Math.Clamp(Math.Max(timer, record), 0, 1) + (UpdateBubbleWidth - BubbleOverlap) * update, 0);
+        BubbleUpdate.Opacity = update;
+        BubbleUpdate.Visibility = update > BarelyVisible ? Visibility.Visible : Visibility.Collapsed;
+        BubbleUpdate.IsHitTestVisible = UpdateBubblePending;
         double tuck = Math.Max(r - Bubble.Height / 2, 0) * BubbleTuckFactor * (1 - Math.Clamp(split, 0, 1)) * scale;
         BubbleMove.X = (pill.Width * scale - wide) / 2 + (BubbleGap + wide) * split - tuck;
         BubbleScale.ScaleX = BubbleScale.ScaleY = bubble;
         BubbleBody.Opacity = Math.Clamp(split * 4 - 3, 0, 1) * (_cinemaDimmed ? 0.48 : 1);
-        Bubble.IsHitTestVisible = split > BubbleClickableSplit;
+        Bubble.IsHitTestVisible = split > BubbleClickableSplit && _bubbleSplit.Target > 0;
 
         double past = ((BubbleGap + wide) * split - wide - tuck) / scale;
         Body.SetShape(pill, r, apart

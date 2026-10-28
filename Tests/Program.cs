@@ -34,6 +34,8 @@ static partial class Program
         if (args is ["--tooltip-layer-probe", var tooltipLayer]) return ToolTipLayerProbe(tooltipLayer);
         if (args is ["--tooltip-preview", var tooltipPreview]) return ToolTipPreview(tooltipPreview);
         if (args is ["--updater-tests"]) return UpdaterTests().GetAwaiter().GetResult();
+        if (args is ["--island-features-tests", var featureOutput]) return IslandFeaturesTests(featureOutput);
+        if (args is ["--native-mixer-test", var nativeOutput]) return NativeMixerIntegration(nativeOutput);
         if (args is ["--throne-tests", var throneOutput]) return ThroneTests(throneOutput);
         if (args is ["--throne-readonly", var throneReadOutput]) return ThroneReadOnly(throneReadOutput);
         if (args is ["--throne-fixture-probe", var thronePort, var throneKey, var throneResult]) return ThroneFixtureProbe(int.Parse(thronePort), throneKey, throneResult).GetAwaiter().GetResult();

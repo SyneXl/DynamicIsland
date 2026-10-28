@@ -1,5 +1,6 @@
 using System.IO;
 using System.Runtime.InteropServices;
+using System.Text;
 using System.Windows;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
@@ -14,21 +15,29 @@ sealed class Shelf
     const int BitsPerPixel = 32, BytesPerPixel = 4;
     const double Dpi = 96;
 
-    public sealed class Item(string path)
+    public sealed class Item(string path, string? text = null, bool owned = false)
     {
         public string Path { get; } = path;
-        public string Name { get; } = System.IO.Path.GetFileName(path.TrimEnd('\\')) is { Length: > 0 } name ? name : path;
+        public string Name => Text is { } text ? string.IsNullOrWhiteSpace(text) ? "Заметка" : Preview(text)
+            : System.IO.Path.GetFileName(Path.TrimEnd('\\')) is { Length: > 0 } name ? name : Path;
+        public string? Text { get; internal set; } = text;
+        public bool Owned { get; } = owned;
         public ImageSource? Picture { get; internal set; }
         public bool IsPhoto { get; internal set; }
     }
 
     readonly Dispatcher _ui;
     readonly List<Item> _items = [];
+    readonly string _storage;
+    readonly Action<string[]> _persist;
+    public const int MaxTextLength = 1_000_000, MaxItems = 200, MaxImagePixels = 16_000_000;
 
-    public Shelf(Dispatcher ui)
+    public Shelf(Dispatcher ui, string? storage = null, IEnumerable<string>? initial = null, Action<string[]>? persist = null)
     {
         _ui = ui;
-        AddNew(Settings.Shelf.Where(Exists));
+        _storage = System.IO.Path.GetFullPath(storage ?? System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "DynamicIsland", "Shelf"));
+        _persist = persist ?? (paths => { if (!Settings.TrySetShelf(paths)) throw new IOException("Не удалось сохранить полку"); });
+        AddNew((initial ?? Settings.Shelf).Where(Exists));
     }
 
     public IReadOnlyList<Item> Items => _items;
@@ -39,21 +48,113 @@ sealed class Shelf
 
     public bool Add(IEnumerable<string> paths)
     {
-        if (!AddNew(paths.Where(Exists))) return false;
-        Save();
+        string[] fresh = paths.Where(Exists).Distinct(StringComparer.OrdinalIgnoreCase)
+            .Where(path => !_items.Any(item => string.Equals(item.Path, path, StringComparison.OrdinalIgnoreCase))).ToArray();
+        if (fresh.Length == 0) return false;
+        if (_items.Count + fresh.Length > MaxItems) throw new InvalidOperationException("На полке не больше 200 элементов");
+        int before = _items.Count;
+        if (!AddNew(fresh)) return false;
+        try { Save(); }
+        catch { _items.RemoveRange(before, _items.Count - before); throw; }
         return true;
     }
 
     public void Remove(Item item)
     {
-        if (_items.Remove(item)) Save();
+        int index = _items.IndexOf(item);
+        if (index < 0) return;
+        _items.RemoveAt(index);
+        try { Save(); }
+        catch { _items.Insert(index, item); throw; }
+        DeleteOwned(item);
     }
 
     public void Clear()
     {
         if (_items.Count == 0) return;
+        Item[] removed = _items.ToArray();
         _items.Clear();
-        Save();
+        try { Save(); }
+        catch { _items.AddRange(removed); throw; }
+        foreach (Item item in removed) DeleteOwned(item);
+    }
+
+    public static string Preview(string text)
+    {
+        ReadOnlySpan<char> preview = text.AsSpan().Trim();
+        int length = Math.Min(preview.Length, 64);
+        if (length > 0 && length < preview.Length && char.IsHighSurrogate(preview[length - 1])) length--;
+        return new string(preview[..length]).Replace('\r', ' ').Replace('\n', ' ').Replace('\t', ' ');
+    }
+
+    bool IsOwned(string path) => string.Equals(System.IO.Path.GetDirectoryName(System.IO.Path.GetFullPath(path)), _storage, StringComparison.OrdinalIgnoreCase)
+        && Guid.TryParseExact(System.IO.Path.GetFileNameWithoutExtension(path), "N", out _)
+        && System.IO.Path.GetExtension(path).ToLowerInvariant() is ".txt" or ".png";
+
+    void DeleteOwned(Item item)
+    {
+        if (!item.Owned || !IsOwned(item.Path)) return;
+        try { File.Delete(item.Path); }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { App.Log(ex); }
+    }
+
+    public Item? AddText(string text)
+    {
+        if (string.IsNullOrWhiteSpace(text)) return null;
+        if (text.Length > MaxTextLength) throw new InvalidOperationException("Текст слишком большой");
+        if (_items.FirstOrDefault(i => i.Text == text) is { } duplicate) return duplicate;
+        CheckRoom();
+        string path = OwnedPath(".txt");
+        File.WriteAllText(path, text, new UTF8Encoding(false));
+        var item = new Item(path, text, true);
+        _items.Add(item);
+        try { Save(); }
+        catch { _items.Remove(item); DeleteOwned(item); throw; }
+        return item;
+    }
+
+    public void UpdateText(Item item, string text)
+    {
+        if (!_items.Contains(item) || item.Text == null || !item.Owned || !IsOwned(item.Path)) throw new InvalidOperationException("Заметка больше не доступна");
+        if (text.Length > MaxTextLength) throw new InvalidOperationException("Текст слишком большой");
+        if (item.Text == text) return;
+        string temporary = item.Path + ".tmp";
+        File.WriteAllText(temporary, text, new UTF8Encoding(false));
+        File.Move(temporary, item.Path, true);
+        item.Text = text; Changed?.Invoke();
+    }
+
+    public bool AddImage(BitmapSource image)
+    {
+        if (image.PixelWidth <= 0 || image.PixelHeight <= 0 || (long)image.PixelWidth * image.PixelHeight > MaxImagePixels)
+            throw new InvalidOperationException("Изображение слишком большое");
+        CheckRoom();
+        string path = OwnedPath(".png");
+        var encoder = new PngBitmapEncoder();
+        encoder.Frames.Add(BitmapFrame.Create(image));
+        try { using var stream = File.Create(path); encoder.Save(stream); }
+        catch { File.Delete(path); throw; }
+        try { return Add([path]); }
+        catch { File.Delete(path); throw; }
+    }
+
+    // Explicit paste/drop only. Never watch the system clipboard or retain unrelated clipboard formats.
+    public bool Paste(IDataObject data)
+    {
+        if (data.GetDataPresent(DataFormats.FileDrop) && data.GetData(DataFormats.FileDrop) is string[] files) return Add(files);
+        if (data.GetDataPresent(DataFormats.Bitmap) && data.GetData(DataFormats.Bitmap) is BitmapSource image) return AddImage(image);
+        string? text = data.GetData(DataFormats.UnicodeText) as string ?? data.GetData(DataFormats.Text) as string;
+        return text != null && AddText(text) != null;
+    }
+
+    public static bool CanPaste(IDataObject data) => data.GetDataPresent(DataFormats.FileDrop)
+        || data.GetDataPresent(DataFormats.Bitmap) || data.GetDataPresent(DataFormats.UnicodeText) || data.GetDataPresent(DataFormats.Text);
+
+    void CheckRoom() { if (_items.Count >= MaxItems) throw new InvalidOperationException("На полке уже 200 элементов"); }
+    string OwnedPath(string extension)
+    {
+        Directory.CreateDirectory(_storage);
+        return System.IO.Path.Combine(_storage, Guid.NewGuid().ToString("N") + extension);
     }
 
     public static bool Exists(string path) => File.Exists(path) || Directory.Exists(path);
@@ -64,7 +165,14 @@ sealed class Shelf
         foreach (string path in paths)
         {
             if (_items.Any(item => string.Equals(item.Path, path, StringComparison.OrdinalIgnoreCase))) continue;
-            var fresh = new Item(path);
+            bool owned = IsOwned(path);
+            string? text = null;
+            if (owned && System.IO.Path.GetExtension(path).Equals(".txt", StringComparison.OrdinalIgnoreCase))
+            {
+                try { if (new FileInfo(path).Length <= MaxTextLength * 4L) text = File.ReadAllText(path); }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { App.Log(ex); }
+            }
+            var fresh = new Item(path, text, owned);
             _items.Add(fresh);
             added.Add(fresh);
         }
@@ -76,7 +184,7 @@ sealed class Shelf
 
     void Save()
     {
-        Settings.Shelf = _items.Select(item => item.Path).ToArray();
+        _persist(_items.Select(item => item.Path).ToArray());
         Changed?.Invoke();
     }
 
@@ -86,6 +194,24 @@ sealed class Shelf
         {
             foreach (Item item in items)
             {
+                if (item.Text != null) continue;
+                if (item.Owned)
+                {
+                    try
+                    {
+                        using var stream = new FileStream(item.Path, FileMode.Open, FileAccess.Read, FileShare.Read | FileShare.Delete);
+                        var image = new BitmapImage();
+                        image.BeginInit(); image.StreamSource = stream; image.CacheOption = BitmapCacheOption.OnLoad;
+                        image.DecodePixelWidth = ThumbnailSize; image.EndInit(); image.Freeze();
+                        _ui.InvokeAsync(() =>
+                        {
+                            if (!_items.Contains(item)) return;
+                            item.Picture = image; item.IsPhoto = true; PictureLoaded?.Invoke(item);
+                        });
+                    }
+                    catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or NotSupportedException or FileFormatException) { App.Log(ex); }
+                    continue;
+                }
                 BitmapSource? picture = ShellImage(item.Path, ThumbnailSize, ThumbnailOnly);
                 bool photo = picture != null && IsOpaque(picture);
                 if (!photo) picture = ShellImage(item.Path, IconSize, IconOnly);

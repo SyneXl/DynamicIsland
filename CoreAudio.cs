@@ -164,6 +164,7 @@ interface IAudioSessionControl2
     [PreserveSig] int GetSessionIdentifier(out IntPtr id);
     [PreserveSig] int GetSessionInstanceIdentifier(out IntPtr id);
     [PreserveSig] int GetProcessId(out uint process);
+    [PreserveSig] int IsSystemSoundsSession();
 }
 
 [ComImport, Guid("87CE5498-68D6-44E5-9215-6DA47EF883D8"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
@@ -172,6 +173,7 @@ interface ISimpleAudioVolume
     [PreserveSig] int SetMasterVolume(float level, ref Guid context);
     [PreserveSig] int GetMasterVolume(out float level);
     [PreserveSig] int SetMute([MarshalAs(UnmanagedType.Bool)] bool mute, ref Guid context);
+    [PreserveSig] int GetMute([MarshalAs(UnmanagedType.Bool)] out bool mute);
 }
 
 [ComImport, Guid("1CB9AD4C-DBFA-4C32-B178-C2F568A703B2"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]

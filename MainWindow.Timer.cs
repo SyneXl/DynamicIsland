@@ -183,6 +183,7 @@ public partial class MainWindow
         if (_bubbleRecord.Target > 0) parts.Add((RecordBubbleWidth, Panel.Record));
         if (_bubbleTimer.Target > 0) parts.Add((TimerBubbleWidth, Panel.Timer));
         if (_bubbleShelf.Target > 0) parts.Add((_shelfBubbleWidth.Value, Panel.Shelf));
+        if (_bubbleUpdate.Target > 0 && UpdateBubblePending) parts.Add((UpdateBubbleWidth, Panel.Update));
         double end = 0;
         foreach ((double width, Panel panel) in parts.SkipLast(1))
         {
@@ -216,7 +217,9 @@ public partial class MainWindow
         if (!_bubblePressed) return;
         e.Handled = true;
         _bubblePressed = false;
-        SelectPanel(BubblePanelAt(e.GetPosition(Bubble).X));
+        Panel target = BubblePanelAt(e.GetPosition(Bubble).X);
+        if (target == Panel.Update) ReplayUpdateNotice();
+        else SelectPanel(target);
         UpdateView();
         UpdateTargets();
         _collapseTimeout.Start(LongCollapseDelay);
