@@ -270,6 +270,9 @@ public partial class MainWindow
             View.Zapret => ZapretScroll,
             View.ZapretFolders => ZapretFoldersScroll,
             View.ZapretStrategies => ZapretStrategiesScroll,
+            View.Throne => ThroneScroll,
+            View.ThroneGroups => ThroneGroupsScroll,
+            View.ThroneServers => ThroneServersScroll,
             _ => null,
         };
         if (scroll == null) return false;

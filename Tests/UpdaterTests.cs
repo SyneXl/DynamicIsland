@@ -33,6 +33,7 @@ static partial class Program
         try
         {
             byte[] bytes = UpdateBytes();
+            await UpdaterPageTests(bytes);
             using var noReleaseHandler = new UpdateHttp((_, _) => Task.FromResult(new HttpResponseMessage(HttpStatusCode.NotFound)));
             using (var updater = new Updater(new HttpClient(noReleaseHandler), new Version(1, 28, 0)))
             {
@@ -106,6 +107,86 @@ static partial class Program
             return 0;
         }
         catch (Exception ex) { Console.Error.WriteLine(ex); return 1; }
+    }
+
+    static HttpResponseMessage UpdatePage(string url, string html, HttpStatusCode status = HttpStatusCode.OK) => new(status)
+    {
+        RequestMessage = new HttpRequestMessage(HttpMethod.Get, url), Content = new StringContent(html)
+    };
+
+    static async Task UpdaterPageTests(byte[] bytes)
+    {
+        const string tag = "v1.29.0";
+        string releasePage = $"https://github.com/{Updater.Repository}/releases/tag/{tag}";
+        string digest = Convert.ToHexString(SHA256.HashData(bytes));
+        string asset = $"<li><a href=\"/{Updater.Repository}/releases/download/{tag}/DynamicIsland.exe\">DynamicIsland.exe</a><clipboard-copy value=\"sha256:{digest}\"></clipboard-copy></li>";
+        string notes = "<div class=\"markdown-body tmp-my-3\"><ul><li><strong>Fix</strong> &amp; update</li><li>https://example.org/not-a-release-note</li></ul></div>";
+        Check(Updater.PageNotes(notes).SequenceEqual(["Fix & update"]), "release-page notes are decoded, stripped and filtered like API notes");
+        foreach (string mode in new[] { "403", "429", "503", "network", "api-timeout", "latest", "no-release", "missing-hash", "other-row-hash", "foreign-repo", "foreign-host", "prerelease", "bad-download", "no-length", "all-offline" })
+        {
+            string root = Path.Combine(Path.GetTempPath(), "island-page-update-" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(root); int apiCalls = 0, pageCalls = 0; bool handoff = false;
+            using var handler = new UpdateHttp((request, _) =>
+            {
+                Check(request.Headers.Authorization == null, "public updater never embeds GitHub credentials: " + mode);
+                string url = request.RequestUri!.AbsoluteUri;
+                if (url == Updater.LatestReleaseUrl)
+                {
+                    apiCalls++;
+                    if (mode is "network" or "all-offline") throw new HttpRequestException("API offline");
+                    if (mode == "api-timeout") throw new TaskCanceledException("API timeout");
+                    var response = new HttpResponseMessage(mode == "429" ? HttpStatusCode.TooManyRequests : mode == "503" ? HttpStatusCode.ServiceUnavailable : HttpStatusCode.Forbidden);
+                    response.Headers.TryAddWithoutValidation("X-RateLimit-Reset", DateTimeOffset.UtcNow.AddMinutes(15).ToUnixTimeSeconds().ToString());
+                    return Task.FromResult(response);
+                }
+                if (url == Updater.LatestReleasePage)
+                {
+                    pageCalls++;
+                    if (mode == "all-offline") throw new HttpRequestException("Page offline");
+                    string final = mode switch
+                    {
+                        "foreign-repo" => "https://github.com/mihailkotovski/DynamicIsland/releases/tag/v1.29.0",
+                        "foreign-host" => "https://example.org/SyneXl/DynamicIsland/releases/tag/v1.29.0",
+                        "prerelease" => releasePage + "-beta.1",
+                        _ => releasePage
+                    };
+                    return Task.FromResult(UpdatePage(final, notes, mode == "no-release" ? HttpStatusCode.NotFound : HttpStatusCode.OK));
+                }
+                if (url.StartsWith(Updater.ReleaseAssetsPage))
+                {
+                    string html = mode == "missing-hash" ? asset.Replace("value=\"sha256:", "ignored=\"sha256:")
+                        : mode == "other-row-hash" ? asset.Replace("</a>", "</a></li><li>") : asset;
+                    return Task.FromResult(UpdatePage(url, html));
+                }
+                byte[] payload = bytes.ToArray(); if (mode == "bad-download") payload[^1] ^= 1;
+                HttpContent content = mode == "no-length" ? new ChunkedUpdateContent(payload) : new ByteArrayContent(payload);
+                return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) { RequestMessage = request, Content = content });
+            });
+            using var updater = new Updater(new HttpClient(handler), mode == "latest" ? new Version(1, 29, 0) : new Version(1, 28, 0),
+                Path.Combine(root, "target.exe"), _ => handoff = true, () => root);
+            await updater.CheckAsync(true);
+            await updater.CheckAsync(true);
+            Check(apiCalls == 1 && pageCalls == 2, "manual retry honors API reset time while the public page remains usable: " + mode);
+            if (mode == "latest") Check(updater.State == Updater.Stage.Latest, "rate-limited installed version is still correctly recognized as current");
+            else if (mode == "no-release") Check(updater.State == Updater.Stage.NoRelease, "public page confirms valid empty release channel");
+            else if (mode is "missing-hash" or "other-row-hash" or "foreign-repo" or "foreign-host" or "prerelease" or "all-offline")
+                Check(updater.State == Updater.Stage.Failed && !await updater.InstallAsync() && !handoff, "fallback fails closed: " + mode);
+            else
+            {
+                Check(updater.State == Updater.Stage.Available && updater.Notes.SequenceEqual(["Fix & update"]), "fallback finds verified release: " + mode);
+                bool installed = await updater.InstallAsync();
+                Check(installed == (mode != "bad-download") && handoff == installed, "page-channel SHA-256 and handoff enforced: " + mode);
+                if (mode == "no-length") Check(updater.TotalBytes == bytes.Length && updater.Percent == 100, "chunked fallback download finishes with verified size and progress");
+            }
+            if (Directory.Exists(root)) foreach (string file in Directory.GetFiles(root)) File.Delete(file);
+            if (Directory.Exists(root)) Directory.Delete(root);
+        }
+    }
+
+    sealed class ChunkedUpdateContent(byte[] payload) : HttpContent
+    {
+        protected override bool TryComputeLength(out long length) { length = 0; return false; }
+        protected override Task SerializeToStreamAsync(Stream stream, TransportContext? context) => stream.WriteAsync(payload).AsTask();
     }
 
     static async Task<int> UpdateNetworkTest(string output)

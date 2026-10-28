@@ -34,6 +34,10 @@ static partial class Program
         if (args is ["--tooltip-layer-probe", var tooltipLayer]) return ToolTipLayerProbe(tooltipLayer);
         if (args is ["--tooltip-preview", var tooltipPreview]) return ToolTipPreview(tooltipPreview);
         if (args is ["--updater-tests"]) return UpdaterTests().GetAwaiter().GetResult();
+        if (args is ["--throne-tests", var throneOutput]) return ThroneTests(throneOutput);
+        if (args is ["--throne-readonly", var throneReadOutput]) return ThroneReadOnly(throneReadOutput);
+        if (args is ["--throne-fixture-probe", var thronePort, var throneKey, var throneResult]) return ThroneFixtureProbe(int.Parse(thronePort), throneKey, throneResult).GetAwaiter().GetResult();
+        if (args is ["--throne-installer-network", var throneInstallerOutput]) return ThroneInstallerNetwork(throneInstallerOutput).GetAwaiter().GetResult();
         if (args is ["--upstream-tests", var upstreamOutput]) return UpstreamTests(upstreamOutput);
         if (args is ["--update-handoff-tests", var updateExe, var handoffOutput]) return UpdateHandoffTests(updateExe, handoffOutput).GetAwaiter().GetResult();
         if (args is ["--update-network-test", var downloadOutput]) return UpdateNetworkTest(downloadOutput).GetAwaiter().GetResult();

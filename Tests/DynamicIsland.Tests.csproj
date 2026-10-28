@@ -14,5 +14,6 @@
   <ItemGroup>
     <Compile Remove="Fakes\**\*.cs" />
     <ProjectReference Include="..\DynamicIsland.csproj" />
+    <None Update="Fixtures\Throne-v1.json" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>

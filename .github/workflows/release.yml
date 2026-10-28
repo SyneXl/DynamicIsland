@@ -43,6 +43,8 @@ jobs:
         run: dotnet run --project Tests/DynamicIsland.Tests.csproj -c Release
       - name: Updater failure controls
         run: dotnet run --project Tests/DynamicIsland.Tests.csproj -c Release --no-build -- --updater-tests
+      - name: Throne integration controls
+        run: dotnet run --project Tests/DynamicIsland.Tests.csproj -c Release --no-build -- --throne-tests artifacts/throne
       - name: Publish portable executable
         shell: pwsh
         run: |

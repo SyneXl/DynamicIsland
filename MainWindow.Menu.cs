@@ -182,7 +182,7 @@ public partial class MainWindow
 
     void ShowUpdateProgress()
     {
-        UpdateBytes.Text = $"{_updater.DownloadedBytes >> MegabyteShift} из {_updater.TotalBytes >> MegabyteShift} МБ";
+        UpdateBytes.Text = _updater.TotalBytes > 0 ? $"{_updater.DownloadedBytes >> MegabyteShift} из {_updater.TotalBytes >> MegabyteShift} МБ" : $"{_updater.DownloadedBytes >> MegabyteShift} МБ";
         LoadingText.Text = _updater.Percent + "%";
         var fill = new DoubleAnimation(_updater.Percent / 100.0, Ms(200));
         UpdateRing.BeginAnimation(Ring.ProgressProperty, fill);

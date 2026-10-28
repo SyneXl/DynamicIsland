@@ -13,9 +13,9 @@ namespace DynamicIsland;
 
 public partial class MainWindow : Window
 {
-    enum View { Idle, Media, CinemaMedia, Timer, Record, Volume, Charge, Headset, Focus, Toast, Notice, MediaBig, IdleBig, TimerBig, TimerSet, RecordBig, RecordSet, Menu, Settings, Look, Shelf, Weather, Place, Qr, Update, Lyrics, Loading, Codex, MenuLayout, Zapret, ZapretFolders, ZapretStrategies }
+    enum View { Idle, Media, CinemaMedia, Timer, Record, Volume, Charge, Headset, Focus, Toast, Notice, MediaBig, IdleBig, TimerBig, TimerSet, RecordBig, RecordSet, Menu, Settings, Look, Shelf, Weather, Place, Qr, Update, Lyrics, Loading, Codex, MenuLayout, Zapret, ZapretFolders, ZapretStrategies, Throne, ThroneGroups, ThroneServers }
 
-    enum Panel { None, Player, Timer, TimerSet, Record, Menu, Settings, Look, Shelf, Weather, Place, Qr, Update, Lyrics, Codex, MenuLayout, Zapret, ZapretFolders, ZapretStrategies }
+    enum Panel { None, Player, Timer, TimerSet, Record, Menu, Settings, Look, Shelf, Weather, Place, Qr, Update, Lyrics, Codex, MenuLayout, Zapret, ZapretFolders, ZapretStrategies, Throne, ThroneGroups, ThroneServers }
 
     readonly record struct PillShape(double Width, double Height, double Radius);
 
@@ -43,6 +43,9 @@ public partial class MainWindow : Window
         [View.Settings] = new(320, 414, 34),
         [View.Look] = new(352, LookHeight, 34),
         [View.MenuLayout] = new(380, 408, 34),
+        [View.Throne] = new(360, 326, 34),
+        [View.ThroneGroups] = new(380, 430, 34),
+        [View.ThroneServers] = new(400, 466, 34),
         [View.Zapret] = new(360, 284, 34),
         [View.ZapretFolders] = new(420, 466, 34),
         [View.ZapretStrategies] = new(380, 432, 34),
@@ -70,7 +73,7 @@ public partial class MainWindow : Window
         [View.MediaBig] = new(20, 20, 64, 22, 52, 38, 26, 1),
     };
 
-    static readonly View[] MenuPages = [View.Settings, View.Look, View.TimerSet, View.TimerBig, View.RecordSet, View.RecordBig, View.Shelf, View.Weather, View.Qr, View.Codex, View.Zapret];
+    static readonly View[] MenuPages = [View.Settings, View.Look, View.TimerSet, View.TimerBig, View.RecordSet, View.RecordBig, View.Shelf, View.Weather, View.Qr, View.Codex, View.Zapret, View.Throne];
 
     static readonly View[] SettingsPages = [View.Update, View.Lyrics];
 
@@ -146,6 +149,9 @@ public partial class MainWindow : Window
             [View.Settings] = SettingsView,
             [View.Look] = LookView,
             [View.MenuLayout] = MenuLayoutView,
+            [View.Throne] = ThroneView,
+            [View.ThroneGroups] = ThroneGroupsView,
+            [View.ThroneServers] = ThroneServersView,
             [View.Zapret] = ZapretView,
             [View.ZapretFolders] = ZapretFoldersView,
             [View.ZapretStrategies] = ZapretStrategiesView,
@@ -207,6 +213,7 @@ public partial class MainWindow : Window
         PrepareViews();
         PrepareMenuLayout();
         PrepareZapret();
+        PrepareThrone();
         PrepareWeatherHours();
         ApplyTimerTint();
         ApplyRecordTint();
@@ -390,6 +397,7 @@ public partial class MainWindow : Window
         {
             Safely(UpdateClock);
             if (_view == View.Codex) Safely(SyncCodex);
+            if (_view is View.Throne or View.ThroneGroups or View.ThroneServers) PollThrone();
             if ((_view is View.Zapret or View.ZapretFolders or View.ZapretStrategies || _view == View.Menu && _menuButtons["zapret"].Visibility == Visibility.Visible)
                 && !_zapretBusy && Environment.TickCount64 - _zapretStatusAt > 2000) _ = RefreshZapretAsync();
             Safely(PollPower);
@@ -409,6 +417,9 @@ public partial class MainWindow : Window
             Panel.Settings => View.Settings,
             Panel.Look => View.Look,
             Panel.MenuLayout => View.MenuLayout,
+            Panel.Throne => View.Throne,
+            Panel.ThroneGroups => View.ThroneGroups,
+            Panel.ThroneServers => View.ThroneServers,
             Panel.Zapret => View.Zapret,
             Panel.ZapretFolders => View.ZapretFolders,
             Panel.ZapretStrategies => View.ZapretStrategies,
@@ -463,6 +474,7 @@ public partial class MainWindow : Window
         SwitchView(_views[target], _pageDirection != 0 ? _pageDirection : MenuDirection(previous, target));
         if (target == View.Place) BeginTyping();
         else if (previous == View.Place) EndTyping();
+        if (previous == View.ThroneServers) EndThroneTyping();
         MoveMediaSpot(previous, target, to);
         UpdateTargets();
     }
@@ -497,7 +509,8 @@ public partial class MainWindow : Window
         parent == View.Menu && MenuPages.Contains(page) || parent == View.Settings && SettingsPages.Contains(page)
         || parent == View.Weather && WeatherPages.Contains(page)
         || parent == View.Look && page == View.MenuLayout
-        || parent == View.Zapret && page is View.ZapretFolders or View.ZapretStrategies;
+        || parent == View.Zapret && page is View.ZapretFolders or View.ZapretStrategies
+        || parent == View.Throne && page is View.ThroneGroups or View.ThroneServers;
 
     PillShape ShapeOf(View view) => view switch
     {
@@ -512,6 +525,9 @@ public partial class MainWindow : Window
         View.Menu => PillShapes[view] with { Height = MenuView.Height },
         View.MenuLayout => PillShapes[view] with { Height = MenuLayoutView.Height },
         View.Zapret => PillShapes[view] with { Height = ZapretView.Height },
+        View.Throne => PillShapes[view] with { Height = ThroneView.Height },
+        View.ThroneGroups => PillShapes[view] with { Height = ThroneGroupsView.Height },
+        View.ThroneServers => PillShapes[view] with { Height = ThroneServersView.Height },
         View.Codex => PillShapes[view] with { Height = CodexView.Height },
         _ => PillShapes[view],
     };
@@ -557,7 +573,7 @@ public partial class MainWindow : Window
 
     void Collapse()
     {
-        if (_ringing || _hovered || _pickingFiles || IsTyping || _menuDragId != null || _zapretBusy
+        if (_ringing || _hovered || _pickingFiles || IsTyping || _menuDragId != null || _zapretBusy || _throneBusy || _throneDownloading
             || _view == View.MenuLayout && IsActive && MenuLayoutView.IsKeyboardFocusWithin) return;
         ShowPanel(Panel.None);
     }

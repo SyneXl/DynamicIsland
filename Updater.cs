@@ -8,7 +8,7 @@ using System.Text.RegularExpressions;
 
 namespace DynamicIsland;
 
-sealed class Updater : IDisposable
+sealed partial class Updater : IDisposable
 {
     public enum Stage { Idle, Checking, Latest, Available, Loading, NoRelease, Failed }
     public const string Repository = "SyneXl/DynamicIsland";
@@ -16,7 +16,7 @@ sealed class Updater : IDisposable
     internal const string AssetName = "DynamicIsland.exe";
     const long MaxAssetBytes = 512L << 20;
     static readonly TimeSpan CheckInterval = TimeSpan.FromMinutes(30);
-    static readonly TimeSpan CheckTimeout = TimeSpan.FromSeconds(15);
+    static readonly TimeSpan CheckTimeout = TimeSpan.FromSeconds(30);
     public static Version CurrentVersion { get; } = Normalize(Assembly.GetExecutingAssembly().GetName().Version ?? new Version(0, 0, 0));
     static readonly HttpClient SharedHttp = CreateClient();
     readonly HttpClient _http;
@@ -28,6 +28,7 @@ sealed class Updater : IDisposable
     readonly CancellationTokenSource _lifetime = new();
     string _downloadUrl = "", _hash = "";
     DateTime _checkedAt;
+    DateTimeOffset _apiRetryAt;
 
     public event Action? Changed;
     public Stage State { get; private set; }
@@ -59,19 +60,13 @@ sealed class Updater : IDisposable
         {
             using var timeout = CancellationTokenSource.CreateLinkedTokenSource(_lifetime.Token);
             timeout.CancelAfter(CheckTimeout);
-            using var response = await _http.GetAsync(LatestReleaseUrl, timeout.Token);
-            if (response.StatusCode == HttpStatusCode.NotFound)
+            if (!await ReadPublishedReleaseAsync(timeout.Token))
             {
                 LatestVersion = null;
                 Notes = [];
                 SetState(Stage.NoRelease);
                 return;
             }
-            response.EnsureSuccessStatusCode();
-            string json = await response.Content.ReadAsStringAsync(timeout.Token);
-            if (json.Length > 2_000_000) throw new InvalidDataException("Release metadata is too large.");
-            using var document = JsonDocument.Parse(json);
-            ReadRelease(document.RootElement);
             SetState(LatestVersion > _current ? Stage.Available : Stage.Latest);
         }
         catch (Exception ex)
@@ -150,7 +145,9 @@ sealed class Updater : IDisposable
         response.EnsureSuccessStatusCode();
         if (response.RequestMessage?.RequestUri is { } final && final.Scheme != Uri.UriSchemeHttps)
             throw new InvalidDataException("Update download left HTTPS.");
-        if (response.Content.Headers.ContentLength is { } length && length != TotalBytes)
+        if (TotalBytes == 0 && response.Content.Headers.ContentLength is { } expected) TotalBytes = expected;
+        if (TotalBytes < 0 || TotalBytes > MaxAssetBytes) throw new InvalidDataException("Unexpected download length.");
+        if (TotalBytes > 0 && response.Content.Headers.ContentLength is { } length && length != TotalBytes)
             throw new InvalidDataException("Unexpected download length.");
         using var sha = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
         await using (var from = await response.Content.ReadAsStreamAsync(stalled.Token))
@@ -161,19 +158,20 @@ sealed class Updater : IDisposable
             while ((read = await from.ReadAsync(buffer, stalled.Token)) > 0)
             {
                 stalled.CancelAfter(_stallTimeout);
-                if (DownloadedBytes + read > TotalBytes) throw new InvalidDataException("Update exceeds advertised size.");
+                if (DownloadedBytes + read > MaxAssetBytes || TotalBytes > 0 && DownloadedBytes + read > TotalBytes) throw new InvalidDataException("Update exceeds advertised size.");
                 await to.WriteAsync(buffer.AsMemory(0, read), stalled.Token);
                 sha.AppendData(buffer, 0, read);
                 DownloadedBytes += read;
-                int percent = (int)(DownloadedBytes * 100 / TotalBytes);
+                int percent = TotalBytes > 0 ? (int)(DownloadedBytes * 100 / TotalBytes) : 0;
                 if (percent == Percent) continue;
                 Percent = percent;
                 Changed?.Invoke();
             }
             await to.FlushAsync(stalled.Token);
         }
-        if (DownloadedBytes != TotalBytes || !Convert.ToHexString(sha.GetHashAndReset()).Equals(_hash, StringComparison.OrdinalIgnoreCase))
+        if (DownloadedBytes < 64 || TotalBytes > 0 && DownloadedBytes != TotalBytes || !Convert.ToHexString(sha.GetHashAndReset()).Equals(_hash, StringComparison.OrdinalIgnoreCase))
             throw new InvalidDataException("Update SHA-256/length mismatch.");
+        TotalBytes = DownloadedBytes; Percent = 100; Changed?.Invoke();
         using var exe = File.OpenRead(destination);
         if (exe.ReadByte() != 'M' || exe.ReadByte() != 'Z') throw new InvalidDataException("Update is not a Windows executable.");
     }

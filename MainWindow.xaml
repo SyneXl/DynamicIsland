@@ -1152,6 +1152,16 @@
                                 </StackPanel>
                             </Grid>
                         </Button>
+                        <Button Style="{StaticResource RowButton}" Tag="throne" Click="ThroneRow_Click">
+                            <Grid>
+                                <local:Icon Style="{StaticResource RowIcon}" Kind="Vpn"/>
+                                <TextBlock Style="{StaticResource RowLabel}" Text="Throne"/>
+                                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
+                                    <TextBlock x:Name="MenuThrone" Foreground="{StaticResource Dim}" VerticalAlignment="Center"/>
+                                    <local:Icon Style="{StaticResource RowChevron}" Margin="8,1,0,0"/>
+                                </StackPanel>
+                            </Grid>
+                        </Button>
                         <Button Style="{StaticResource RowButton}" Tag="settings" Click="SettingsRow_Click">
                             <Grid>
                                 <local:Icon Style="{StaticResource RowIcon}" Kind="Gear"/>
@@ -1304,6 +1314,104 @@
                                       HorizontalScrollBarVisibility="Disabled" PreviewMouseWheel="MenuScroll_PreviewMouseWheel">
                             <local:RowList x:Name="ZapretStrategyRows"/>
                         </ScrollViewer>
+                    </Grid>
+                </Grid>
+
+                <Grid x:Name="ThroneView" Width="360" Height="326" HorizontalAlignment="Center" VerticalAlignment="Top">
+                    <ScrollViewer x:Name="ThroneScroll" Style="{StaticResource MenuScrollViewer}" VerticalScrollBarVisibility="Auto"
+                                  HorizontalScrollBarVisibility="Disabled" PreviewMouseWheel="MenuScroll_PreviewMouseWheel">
+                        <StackPanel x:Name="ThroneContent" Margin="10,8,10,16">
+                            <Grid Height="32">
+                                <Button Style="{StaticResource BackButton}" Content="THRONE" Click="SettingsBack_Click" HorizontalAlignment="Left" Width="210"/>
+                                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                                    <Button x:Name="ThroneDataFolder" Style="{StaticResource IconButton}" Width="32" Height="32" ToolTip="Папка данных Throne" Click="ThroneDataFolder_Click" AutomationProperties.Name="Выбрать папку данных Throne">
+                                        <local:Icon Kind="Folder" Width="15" Height="15" Fill="{StaticResource Dim}"/>
+                                    </Button>
+                                    <Button x:Name="ThroneRefresh" Style="{StaticResource IconButton}" Width="32" Height="32" ToolTip="Обновить подключение" Click="ThroneRefresh_Click" AutomationProperties.Name="Обновить подключение Throne">
+                                        <Path Data="M19,8 A8,8 0 1 0 20,15 M19,3 V8 H14" Stroke="{StaticResource Dim}" StrokeThickness="1.7" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round" Width="16" Height="16" Stretch="Uniform"/>
+                                    </Button>
+                                </StackPanel>
+                            </Grid>
+                            <StackPanel x:Name="ThroneControls">
+                                <Grid Height="96" Margin="12,8,12,8">
+                                    <Grid.ColumnDefinitions><ColumnDefinition Width="64"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                                    <Button x:Name="ThroneAction" Style="{StaticResource ZapretTransportButton}" Click="ThroneAction_Click" VerticalAlignment="Center" AutomationProperties.Name="Включить Throne">
+                                        <Grid Width="24" Height="24" IsHitTestVisible="False">
+                                            <Path x:Name="ThronePlay" Data="M5,2 L22,12 L5,22 Z" Fill="#111111"/>
+                                            <Path x:Name="ThronePause" Data="M4,2 H10 V22 H4 Z M15,2 H21 V22 H15 Z" Fill="#111111" Visibility="Collapsed"/>
+                                            <local:Icon x:Name="ThroneBusyIcon" Kind="Clock" Width="22" Height="22" Fill="#111111" Visibility="Collapsed"/>
+                                        </Grid>
+                                    </Button>
+                                    <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="22,0,0,0">
+                                        <TextBlock x:Name="ThroneState" FontSize="24" FontWeight="SemiBold" Text="Нет связи" Foreground="{StaticResource Dim}"/>
+                                        <TextBlock x:Name="ThroneActive" FontSize="11.5" Foreground="{StaticResource Dim}" Margin="0,5,0,0" TextTrimming="CharacterEllipsis"/>
+                                    </StackPanel>
+                                </Grid>
+                                <local:RowList>
+                                    <Button x:Name="ThroneGroupButton" Style="{StaticResource RowButton}" Height="54" Click="ThroneGroups_Click">
+                                        <Grid><StackPanel Margin="0,0,20,0" VerticalAlignment="Center">
+                                            <TextBlock Text="Группа" FontSize="12" Foreground="{StaticResource Dim}"/>
+                                            <TextBlock x:Name="ThroneGroupText" Text="Выбери группу" Margin="0,4,0,0" TextTrimming="CharacterEllipsis"/>
+                                        </StackPanel><local:Icon Style="{StaticResource RowChevron}"/></Grid>
+                                    </Button>
+                                    <Button x:Name="ThroneServerButton" Style="{StaticResource RowButton}" Height="54" Click="ThroneServers_Click">
+                                        <Grid><StackPanel Margin="0,0,20,0" VerticalAlignment="Center">
+                                            <TextBlock Text="Сервер" FontSize="12" Foreground="{StaticResource Dim}"/>
+                                            <TextBlock x:Name="ThroneServerText" Text="Выбери сервер" Margin="0,4,0,0" TextTrimming="CharacterEllipsis"/>
+                                        </StackPanel><local:Icon Style="{StaticResource RowChevron}"/></Grid>
+                                    </Button>
+                                </local:RowList>
+                            </StackPanel>
+                            <StackPanel x:Name="ThroneSetup" Margin="12,24,12,8" Visibility="Collapsed">
+                                <TextBlock x:Name="ThroneSetupTitle" Text="Нужна новая версия Throne" FontSize="21" FontWeight="SemiBold" TextWrapping="Wrap"/>
+                                <TextBlock x:Name="ThroneSetupText" FontSize="12" Foreground="{StaticResource Dim}" TextWrapping="Wrap" Margin="0,12,0,18"/>
+                                <Button x:Name="ThroneUpdate" Style="{StaticResource ChipButton}" Content="Обновить Throne" Height="34" Click="ThroneUpdate_Click"/>
+                                <Button x:Name="ThroneBrowse" Style="{StaticResource ChipButton}" Content="Выбрать Throne.exe" Height="32" Margin="0,7,0,0" Click="ThroneBrowse_Click"/>
+                            </StackPanel>
+                            <Button x:Name="ThroneOpen" Style="{StaticResource ChipButton}" Content="Открыть Throne" Height="30" Margin="12,12,12,0" Click="ThroneOpen_Click"/>
+                            <TextBlock x:Name="ThroneNote" FontSize="11.5" Foreground="{StaticResource Dim}" TextWrapping="Wrap" Margin="12,12,12,0" Visibility="Collapsed"/>
+                            <StackPanel x:Name="ThroneInstallOffer" Margin="12,12,12,0" Visibility="Collapsed">
+                                <TextBlock Text="Установщик в «Загрузках»" FontSize="12" Foreground="{StaticResource Dim}" Margin="0,0,0,8"/>
+                                <Button x:Name="ThroneRunInstaller" Style="{StaticResource ChipButton}" Content="Запустить установщик" Height="34" Click="ThroneRunInstaller_Click"/>
+                            </StackPanel>
+                        </StackPanel>
+                    </ScrollViewer>
+                </Grid>
+
+                <Grid x:Name="ThroneGroupsView" Width="380" Height="430" HorizontalAlignment="Center" VerticalAlignment="Top">
+                    <Grid Margin="10,8,10,14">
+                        <Grid.RowDefinitions><RowDefinition Height="36"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+                        <Button Style="{StaticResource BackButton}" Content="ГРУППА THRONE" Click="ThroneBack_Click"/>
+                        <ScrollViewer x:Name="ThroneGroupsScroll" Grid.Row="1" Style="{StaticResource MenuScrollViewer}" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" PreviewMouseWheel="MenuScroll_PreviewMouseWheel">
+                            <StackPanel x:Name="ThroneGroupRows"/>
+                        </ScrollViewer>
+                        <TextBlock x:Name="ThroneGroupsEmpty" Grid.Row="2" Text="Добавь подписку или серверы в Throne" FontSize="12" TextWrapping="Wrap" Foreground="{StaticResource Dim}" Margin="12,12" Visibility="Collapsed"/>
+                    </Grid>
+                </Grid>
+
+                <Grid x:Name="ThroneServersView" Width="400" Height="466" HorizontalAlignment="Center" VerticalAlignment="Top">
+                    <Grid Margin="10,8,10,14">
+                        <Grid.RowDefinitions><RowDefinition Height="36"/><RowDefinition Height="40"/><RowDefinition Height="40"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+                        <Button Style="{StaticResource BackButton}" Content="СЕРВЕР THRONE" Click="ThroneBack_Click"/>
+                        <Grid Grid.Row="1" Margin="8,0"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                            <Button x:Name="ThronePing" Style="{StaticResource ChipButton}" Content="Проверить пинг" Click="ThronePing_Click" Height="30" Margin="0,0,5,0"/>
+                            <Button x:Name="ThroneSort" Grid.Column="1" Style="{StaticResource ChipButton}" Content="По порядку" Click="ThroneSort_Click" Height="30" Margin="5,0,0,0" ToolTip="Изменить сортировку"/>
+                        </Grid>
+                        <Border Grid.Row="2" CornerRadius="12" Background="#19FFFFFF" Margin="8,3,8,7" Padding="10,4" PreviewMouseLeftButtonDown="ThroneSearch_MouseDown">
+                            <Grid>
+                                <local:Icon Kind="Search" Width="12" Height="12" Fill="{StaticResource Dim}" HorizontalAlignment="Left"/>
+                                <TextBox x:Name="ThroneServerFilter" Margin="22,0,0,0" Background="Transparent" BorderThickness="0" Foreground="White" CaretBrush="White" FontSize="13" VerticalContentAlignment="Center" TextChanged="ThroneServerFilter_TextChanged" PreviewKeyDown="ThroneSearch_KeyDown" AutomationProperties.Name="Поиск серверов"/>
+                                <TextBlock Text="Поиск серверов" Margin="24,0,0,0" Foreground="{StaticResource Dim}" FontSize="12" VerticalAlignment="Center" IsHitTestVisible="False">
+                                    <TextBlock.Style><Style TargetType="TextBlock"><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers>
+                                        <DataTrigger Binding="{Binding Text, ElementName=ThroneServerFilter}" Value=""><Setter Property="Visibility" Value="Visible"/></DataTrigger>
+                                    </Style.Triggers></Style></TextBlock.Style>
+                                </TextBlock>
+                            </Grid>
+                        </Border>
+                        <ScrollViewer x:Name="ThroneServersScroll" Grid.Row="3" Style="{StaticResource MenuScrollViewer}" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" PreviewMouseWheel="MenuScroll_PreviewMouseWheel">
+                            <StackPanel x:Name="ThroneServerRows"/>
+                        </ScrollViewer>
+                        <TextBlock x:Name="ThroneServerNote" Grid.Row="4" FontSize="11.5" TextWrapping="Wrap" Foreground="{StaticResource Dim}" Margin="12,8,12,0"/>
                     </Grid>
                 </Grid>
 

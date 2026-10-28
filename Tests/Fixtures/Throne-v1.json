@@ -1,0 +1,130 @@
+{
+  "protocol": "throne-api/1",
+  "description": "Frames are listed in send order. Every frame must seal to `wire` and open back to `plaintext`. Every `invalid` entry must be rejected by a receiver that expects direction `dir` and counter `counter` under that case's keys. Empty plaintexts exercise the frame layer only; they are not valid messages.",
+  "cases": [
+    {
+      "name": "two exchanges",
+      "key": "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8",
+      "server_hello": "a0a1a2a3a4a5a6a7a8a9aaabacadaeaf",
+      "client_hello": "01b0b1b2b3b4b5b6b7b8b9babbbcbdbebf",
+      "k_c2s": "c5956664b2b29a4c000c660e12cb1dee393891d66f5a4370a963731f5d8d45e3",
+      "k_s2c": "82e7307aac852f6fa2fd28731b87cb7a873a35dad696bc308533bb655331bb58",
+      "frames": [
+        {
+          "dir": "c2s",
+          "counter": 0,
+          "plaintext": "{\"method\":\"GET\",\"path\":\"/v1/status\"}",
+          "wire": "00000034bbaf22ae010f5f76f0a362090bdd23f882878666caec9cd0dd49fa42b579bf7070c1841466f2f617e15f81c8e40a70d369495f69"
+        },
+        {
+          "dir": "s2c",
+          "counter": 0,
+          "plaintext": "{\"status\":200,\"body\":{\"state\":\"idle\"}}",
+          "wire": "00000036605e3560e63dce5a2254de4d8159a763839d7cf60a4fd8830218ecf1a081cd234f0aa613545c0da4a7f683b7cedc39d2d3674c6d4801"
+        },
+        {
+          "dir": "c2s",
+          "counter": 1,
+          "plaintext": "{\"method\":\"PUT\",\"path\":\"/v1/connection\",\"body\":{\"profile\":12}}",
+          "wire": "0000004ead7237844b2ad005e498abbf4500b48cf71364c5b8f4b0701f28c05dcb6bf6f3a6aedf651417e68d0f86a7a117dc2abae4c77c0f3bedd1e1c894bad126d788407b867c6dacfc2fdfd63d8c72e1c6"
+        },
+        {
+          "dir": "s2c",
+          "counter": 1,
+          "plaintext": "{\"status\":409,\"error\":{\"code\":\"busy\",\"message\":\"Another profile is starting...\"}}",
+          "wire": "000000612f77445fa0d5292e5bfb432b883e779944b8a490f2e2fabba9b4fa258229d5aa770f1a8dde530ffe30cb187724e3ab4b4116c634c5fc70bd31ec6bc298ec651a76c8a6c81897adcede71e88f155cc40219ba39fc2e2194808a3090904ed6698d4e"
+        }
+      ],
+      "invalid": [
+        {
+          "name": "tag bit flipped",
+          "dir": "c2s",
+          "counter": 0,
+          "wire": "00000034bbaf22ae010f5f76f0a362090bdd23f882878666caec9cd0dd49fa42b579bf7070c1841466f2f617e15f81c8e40a70d369495f68"
+        },
+        {
+          "name": "ciphertext bit flipped",
+          "dir": "c2s",
+          "counter": 0,
+          "wire": "00000034baaf22ae010f5f76f0a362090bdd23f882878666caec9cd0dd49fa42b579bf7070c1841466f2f617e15f81c8e40a70d369495f69"
+        },
+        {
+          "name": "length header and size changed",
+          "dir": "c2s",
+          "counter": 0,
+          "wire": "00000035bbaf22ae010f5f76f0a362090bdd23f882878666caec9cd0dd49fa42b579bf7070c1841466f2f617e15f81c8e40a70d369495f6900"
+        },
+        {
+          "name": "frame from a later counter",
+          "dir": "c2s",
+          "counter": 0,
+          "wire": "0000004ead7237844b2ad005e498abbf4500b48cf71364c5b8f4b0701f28c05dcb6bf6f3a6aedf651417e68d0f86a7a117dc2abae4c77c0f3bedd1e1c894bad126d788407b867c6dacfc2fdfd63d8c72e1c6"
+        },
+        {
+          "name": "server frame sent back to the server",
+          "dir": "c2s",
+          "counter": 0,
+          "wire": "00000036605e3560e63dce5a2254de4d8159a763839d7cf60a4fd8830218ecf1a081cd234f0aa613545c0da4a7f683b7cedc39d2d3674c6d4801"
+        },
+        {
+          "name": "client frame sent back to the client",
+          "dir": "s2c",
+          "counter": 0,
+          "wire": "00000034bbaf22ae010f5f76f0a362090bdd23f882878666caec9cd0dd49fa42b579bf7070c1841466f2f617e15f81c8e40a70d369495f69"
+        },
+        {
+          "name": "sealed with another key",
+          "dir": "c2s",
+          "counter": 0,
+          "wire": "00000034a179177222866d9162273892f5dd4fe065525c125a4513d29781106ef910f2edfd0e2266576655e27e1d7d4a6be893d7b73ae564"
+        },
+        {
+          "name": "length below 16",
+          "dir": "c2s",
+          "counter": 0,
+          "wire": "0000000f000000000000000000000000000000"
+        },
+        {
+          "name": "length above the client limit",
+          "dir": "c2s",
+          "counter": 0,
+          "wire": "00100001"
+        }
+      ]
+    },
+    {
+      "name": "multi-block and empty frames",
+      "key": "bljyVf7GZBkFc4ehd35siy7LduS9QD-st76wDYoRFsE",
+      "server_hello": "d6a8051c9f0adb0eae55d99d689ed279",
+      "client_hello": "0191d4a39511ee6560feedb5df2a02221f",
+      "k_c2s": "519d962b1c2460464983c013187a28e240c54b3c640b514de91157d81195ac75",
+      "k_s2c": "e893d3afed32a26b038ac304d03085dbea03096429ec77c1be3701b139eb9fef",
+      "frames": [
+        {
+          "dir": "c2s",
+          "counter": 0,
+          "plaintext": "{\"method\":\"GET\",\"path\":\"/v1/profiles\",\"query\":{\"group\":\"3\",\"name\":\"DE|NL\"}}",
+          "wire": "0000005b6baaaeefbe111f9089faf1a4260ae581b6d5254ab98b3dc17bac9a5afabd5bbc4c7347e9fa1bc4a0c9bf6a2d76ba8c14e89582b46fdb77b9b0b5685a5c1906cdbddc3ae73e403780255390ff1a1ccf90c8d496821d2f03bd205156"
+        },
+        {
+          "dir": "s2c",
+          "counter": 0,
+          "plaintext": "{\"status\":200,\"body\":{\"profiles\":[{\"id\":0,\"name\":\"Server 0 — ü\"},{\"id\":1,\"name\":\"Server 1 — ü\"},{\"id\":2,\"name\":\"Server 2 — ü\"},{\"id\":3,\"name\":\"Server 3 — ü\"},{\"id\":4,\"name\":\"Server 4 — ü\"},{\"id\":5,\"name\":\"Server 5 — ü\"},{\"id\":6,\"name\":\"Server 6 — ü\"},{\"id\":7,\"name\":\"Server 7 — ü\"},{\"id\":8,\"name\":\"Server 8 — ü\"},{\"id\":9,\"name\":\"Server 9 — ü\"},{\"id\":10,\"name\":\"Server 10 — ü\"},{\"id\":11,\"name\":\"Server 11 — ü\"}]}}",
+          "wire": "000001d024057c0cf099edd5aaa8a4cff572c9c613568947136389ab33301cd6d89c679541cbfad0fcc0e72045dc786d04556fe698b0df6eecf53c0d5e4dcc29d232771ff2f9c7490f1e5fa78b83948143d32adb02c2aeffd86cd431bca40da93c11077ddaae86a19479c39aa75296e07b241ef8a0eb4ad7c76355bc304c7c9234d5fccbb587b2aa04eb2f4ef1c9e9bada5e511f01ed0af4c3f117abc722df23717066e6d402ae90f28f8fc49bdc34b1d5535d0eea9effcfe8870fd38b844b67dc8b8a09267ab101bc35043c401268f5b07eb3f210fa1951b69dba51f815fd29b05dea40dadc01113a193fec6fc4301be4eee04dc65183a14ca203ce7d2cc268a4a7bc0de7e244c12586350fa401f894d5c3aedcb9ee1317ca489a4cb7a64e58b54f88f3618da2f3adf3a445b9514b93e12471a6cff181d7220b117907e6e8448e9ac9bb371a80a88a31ffab0c951e15698391a23e135917b938e16a20fc0e58d1ba1a888903ce8d0475fc67e2642444675276e6dcb96112b4949a6f43dd42441da4c15425fdafc109561a9b05137181ae0f58496f4e6a9c67de98fac9f7c517f4a0674cd3e1be1ff1472b491e27ad1a6e4cd29454fa39ce291f529d7e422841c33fdc5674ec0df810928d7016cc5d658eeb5daf"
+        },
+        {
+          "dir": "c2s",
+          "counter": 1,
+          "plaintext": "",
+          "wire": "0000001022b689a8d2714cb37f52517d4fa2b138"
+        },
+        {
+          "dir": "s2c",
+          "counter": 1,
+          "plaintext": "",
+          "wire": "00000010e1064bb40626cbeafd40a1d6268a7f15"
+        }
+      ]
+    }
+  ]
+}

@@ -60,7 +60,10 @@ public partial class App : Application
                     && window.FindName("HeadsetGadget") != null
                     && window.FindName("ZapretView") is FrameworkElement { Height: > 0 }
                     && window.FindName("ZapretFolderRows") != null
-                    && window.FindName("ZapretStrategyRows") != null;
+                    && window.FindName("ZapretStrategyRows") != null
+                    && window.FindName("ThroneView") is FrameworkElement { Height: > 0 }
+                    && window.FindName("ThroneGroupRows") != null
+                    && window.FindName("ThroneServerRows") != null;
                 File.WriteAllText(result, JsonSerializer.Serialize(new { ready, ui = "WPF", externalServices = false,
                     version = Updater.CurrentVersion.ToString(), updateRepository = Updater.Repository }));
                 window.Close();

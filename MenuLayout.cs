@@ -2,8 +2,8 @@ using System.Text.Json;
 
 namespace DynamicIsland;
 
-sealed record MenuDefinition(string Id, string Title, Glyph Icon, bool Required = false);
-sealed record MenuEntry(string Id, bool Visible = true);
+sealed record MenuDefinition(string Id, string Title, Glyph Icon, bool Required = false, bool DefaultVisible = true);
+sealed record MenuEntry(string Id, bool Visible = true, bool Automatic = false);
 
 // IDs are persistence keys, independent of translations, labels and enum ordinals.
 sealed class MenuLayout
@@ -12,6 +12,7 @@ sealed class MenuLayout
         new("timer", "Таймер", Glyph.Clock),
         new("obs", "Запись OBS", Glyph.Record),
         new("zapret", "Zapret", Glyph.Shield),
+        new("throne", "Throne", Glyph.Vpn, DefaultVisible: false),
         new("shelf", "Полка", Glyph.Tray),
         new("weather", "Погода", Glyph.CloudSun),
         new("qr", "QR-код с экрана", Glyph.Qr),
@@ -26,7 +27,9 @@ sealed class MenuLayout
     readonly IReadOnlyList<MenuDefinition> _catalog;
     public IReadOnlyList<MenuEntry> Entries { get; }
     public int VisibleCount => Entries.Count(e => e.Visible);
-    public bool IsDefault => Entries.SequenceEqual(_catalog.Select(d => new MenuEntry(d.Id)));
+    public static bool ThroneDefaultVisible { get; set; }
+    static bool DefaultVisible(MenuDefinition d) => d.Required || d.DefaultVisible || d.Id == "throne" && ThroneDefaultVisible;
+    public bool IsDefault => Entries.SequenceEqual(_catalog.Select(d => new MenuEntry(d.Id, DefaultVisible(d), d.Id == "throne")));
 
     MenuLayout(IEnumerable<MenuEntry?> entries, IReadOnlyList<MenuDefinition> catalog)
     {
@@ -37,7 +40,7 @@ sealed class MenuLayout
         foreach (MenuEntry? entry in entries)
         {
             if (entry?.Id == null || !known.TryGetValue(entry.Id, out var definition) || !seen.Add(entry.Id)) continue;
-            result.Add(entry with { Visible = definition.Required || entry.Visible });
+            result.Add(entry with { Visible = definition.Required || entry.Visible, Automatic = entry.Id == "throne" && entry.Automatic });
         }
         // Add Zapret beside integrations, not below the protected footer. Existing
         // entries keep their relative order and visibility.
@@ -45,13 +48,17 @@ sealed class MenuLayout
             if (seen.Add(definition.Id))
             {
                 int obs = result.FindIndex(e => e.Id == "obs");
-                if (definition.Id == "zapret" && obs >= 0) result.Insert(obs + 1, new(definition.Id));
-                else result.Add(new(definition.Id));
+                int zapret = result.FindIndex(e => e.Id == "zapret");
+                var added = new MenuEntry(definition.Id, DefaultVisible(definition), definition.Id == "throne");
+                if (definition.Id == "zapret" && obs >= 0) result.Insert(obs + 1, added);
+                else if (definition.Id == "throne" && zapret >= 0) result.Insert(zapret + 1, added);
+                else result.Add(added);
             }
         Entries = result.AsReadOnly();
     }
 
     public static MenuLayout Default(IReadOnlyList<MenuDefinition>? catalog = null) => new([], catalog ?? Catalog);
+
 
     public static MenuLayout Parse(string? json, IReadOnlyList<MenuDefinition>? catalog = null)
     {
@@ -85,7 +92,10 @@ sealed class MenuLayout
     public string Serialize() => JsonSerializer.Serialize(new Stored(FormatVersion, Entries.ToArray()));
 
     public MenuLayout SetVisible(string id, bool visible) =>
-        new(Entries.Select(e => e.Id == id ? e with { Visible = visible } : e), _catalog);
+        new(Entries.Select(e => e.Id == id ? e with { Visible = visible, Automatic = false } : e), _catalog);
+
+    public MenuLayout DetectThrone(bool available) =>
+        new(Entries.Select(e => e.Id == "throne" && e.Automatic ? e with { Visible = available } : e), _catalog);
 
     public MenuLayout Move(string id, int offset)
     {

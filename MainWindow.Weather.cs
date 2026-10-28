@@ -27,7 +27,7 @@ public partial class MainWindow
     string _foundFor = "";
     IntPtr _typedAfter;
 
-    bool IsTyping => _view == View.Place && IsActive;
+    bool IsTyping => IsActive && (_view == View.Place || _view == View.ThroneServers && ThroneServerFilter.IsKeyboardFocusWithin);
     double CompactHomeWidth => IdleWeather.Visibility == Visibility.Visible ? 176 : 118;
 
     void PrepareWeatherHours()
@@ -193,7 +193,7 @@ public partial class MainWindow
 
     void OnDeactivated(object? sender, EventArgs e)
     {
-        if (_panel is Panel.Place or Panel.MenuLayout && !_hovered) _collapseTimeout.Start(CollapseDelay);
+        if (_panel is Panel.Place or Panel.MenuLayout or Panel.ThroneServers && !_hovered) _collapseTimeout.Start(CollapseDelay);
     }
 
     void PlaceField_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)

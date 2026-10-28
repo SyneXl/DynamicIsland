@@ -73,6 +73,14 @@ static class Settings
     static int _gap = Math.Clamp(Read(nameof(Gap), DefaultGap), 0, MaxGap);
     static int _accent = Read(nameof(Accent), 0);
     static MenuLayout _menu = MenuLayout.Parse(Read("MenuLayout", ""));
+    static ThronePreferences _throne = ThronePreferences.Parse(Read("Throne", ""));
+    public static ThronePreferences Throne => _throne;
+    public static bool TrySetThrone(ThronePreferences value)
+    {
+        if (!Write("Throne", value.Serialize(), RegistryValueKind.String)) return false;
+        _throne = value;
+        return true;
+    }
     static ZapretPreferences _zapret = ZapretPreferences.Parse(Read("Zapret", ""));
     public static ZapretPreferences Zapret => _zapret;
     public static bool TrySetZapret(ZapretPreferences value)
