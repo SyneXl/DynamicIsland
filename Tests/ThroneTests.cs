@@ -223,6 +223,8 @@ static partial class Program
         Set(window, "_throneProfiles", new[] { new ThroneProfile(11, 1, "DE Frankfurt", 85, "vless", false), new ThroneProfile(12, 1, "NL Amsterdam", 25, "vless", false), new ThroneProfile(13, 1, "Unavailable", -1, "vless", false), new ThroneProfile(21, 2, "FI Helsinki", 30, "vless", false) });
         Complete((Task)Call(window, "RefreshThroneAsync", false)!); Page("Throne");
         Check(((TextBlock)window.FindName("ThroneState")).Text == "Выключен" && ((Button)window.FindName("ThroneAction")).IsEnabled, "idle state offers enabled play control");
+        Check(((Button)window.FindName("ThroneBrowse")).Visibility == Visibility.Collapsed && ((Button)window.FindName("ThroneDataFolder")).Visibility == Visibility.Collapsed,
+            "healthy API hides both manual recovery pickers");
         Capture("throne-off.png");
         Click("ThroneAction");
         Check(fake.Requests.Last().Method == "PUT" && fake.Requests.Last().Body.Contains("11"), "play starts specifically selected profile");
@@ -260,10 +262,46 @@ static partial class Program
         Check(((TextBlock)window.FindName("ThroneNote")).Text.Contains("занят") && ((TextBlock)window.FindName("ThroneState")).Text == "Выключен", "API failure leaves confirmed state intact with short error");
         Set(window, "_throneApi", null!); Set(window, "_throneStatus", null!); Set(window, "_throneMessage", ""); Set(window, "_throneInstallation", new ThroneDiscoveryResult(null, null, false, false, null, null)); Call(window, "SyncThrone");
         Check(((Button)window.FindName("ThroneUpdate")).Visibility == Visibility.Visible, "old or absent client offers latest installer");
+        Check(((Button)window.FindName("ThroneBrowse")).Visibility == Visibility.Visible && ((Button)window.FindName("ThroneDataFolder")).Visibility == Visibility.Collapsed,
+            "missing executable offers only the executable picker");
         Capture("throne-update.png");
-        Set(window, "_throneInstallation", new ThroneDiscoveryResult(null, null, true, false, null, null)); Call(window, "SyncThrone");
+        const string foundExe = @"C:\Throne-fixture\Throne.exe", foundData = @"C:\Throne-fixture";
+        Set(window, "_throneReadError", false);
+        Set(window, "_throneInstallation", new ThroneDiscoveryResult(foundExe, foundData, true, false, null, null)); Call(window, "SyncThrone");
         Check(((Button)window.FindName("ThroneUpdate")).Visibility == Visibility.Collapsed && ((TextBlock)window.FindName("ThroneSetupText")).Text.Contains("API"), "installed beta with disabled API gets setup guide rather than false update requirement");
+        Check(((Button)window.FindName("ThroneBrowse")).Visibility == Visibility.Collapsed && ((Button)window.FindName("ThroneDataFolder")).Visibility == Visibility.Collapsed,
+            "found installation with API disabled does not suggest replacing paths");
         Capture("throne-api-setup.png");
+        Set(window, "_throneReadError", true); Call(window, "SyncThrone");
+        Check(((Button)window.FindName("ThroneDataFolder")).Visibility == Visibility.Collapsed,
+            "old connection error does not expose folder picker when API is disabled");
+        Set(window, "_throneInstallation", new ThroneDiscoveryResult(foundExe, foundData, true, true, null, null)); Call(window, "SyncThrone");
+        Check(((Button)window.FindName("ThroneDataFolder")).Visibility == Visibility.Visible && ((Button)window.FindName("ThroneBrowse")).Visibility == Visibility.Collapsed,
+            "failed connection exposes folder recovery without a redundant executable picker");
+        Set(window, "_throneLoading", true); Call(window, "SyncThrone");
+        Check(((Button)window.FindName("ThroneDataFolder")).Visibility == Visibility.Collapsed && ((Button)window.FindName("ThroneBrowse")).Visibility == Visibility.Collapsed,
+            "manual controls remain hidden while detection or reconnection is pending");
+        Set(window, "_throneLoading", false); Set(window, "_throneReadError", false);
+        Set(window, "_throneInstallation", new ThroneDiscoveryResult(foundExe, foundData, true, true, null, "Обнови ключ API в настройках Throne")); Call(window, "SyncThrone");
+        Check(((Button)window.FindName("ThroneDataFolder")).Visibility == Visibility.Visible,
+            "invalid discovered API credentials retain manual configuration recovery");
+        Capture("throne-config-recovery.png");
+        Set(window, "_throneInstallation", new ThroneDiscoveryResult(foundExe, null, true, false, null, null)); Call(window, "SyncThrone");
+        Check(((Button)window.FindName("ThroneDataFolder")).Visibility == Visibility.Visible,
+            "missing configuration retains manual data-directory recovery");
+        Set(window, "_throneInstallation", new ThroneDiscoveryResult(foundExe, foundData, false, false, null, null)); Call(window, "SyncThrone");
+        Check(((Button)window.FindName("ThroneBrowse")).Visibility == Visibility.Collapsed && ((Button)window.FindName("ThroneDataFolder")).Visibility == Visibility.Collapsed,
+            "found legacy installation offers update rather than unnecessary path selection");
+        Set(window, "_throneInstallation", null!); Call(window, "SyncThrone");
+        Check(((Button)window.FindName("ThroneBrowse")).Visibility == Visibility.Collapsed && ((Button)window.FindName("ThroneDataFolder")).Visibility == Visibility.Collapsed,
+            "initial unknown state does not flash manual controls before discovery");
+        Set(window, "_throneReadError", true); Call(window, "SyncThrone");
+        Check(((Button)window.FindName("ThroneBrowse")).Visibility == Visibility.Visible && ((Button)window.FindName("ThroneDataFolder")).Visibility == Visibility.Collapsed,
+            "failed discovery with no installation retains executable recovery");
+        Set(window, "_throneApi", fake);
+        Set(window, "_throneStatus", new ThroneStatus("idle", -1, "", 11)); Call(window, "SyncThrone");
+        Check(((Button)window.FindName("ThroneBrowse")).Visibility == Visibility.Collapsed && ((Button)window.FindName("ThroneDataFolder")).Visibility == Visibility.Collapsed,
+            "successful reconnection automatically hides both manual controls again");
         window.Close();
     }
 

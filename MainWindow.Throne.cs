@@ -135,13 +135,22 @@ public partial class MainWindow
         bool capable = _throneInstallation?.Capable == true;
         bool running = _throneStatus?.Running == true;
         bool changing = _throneBusy || _throneStatus?.Transitioning == true;
+        bool discoveryFinished = _throneInstallation != null || _throneReadError;
+        bool recovery = discoveryFinished && !connected && !_throneLoading;
+        bool executableMissing = string.IsNullOrWhiteSpace(_throneInstallation?.Executable);
+        bool configurationProblem = capable && (_throneInstallation!.DataDirectory == null
+            || _throneInstallation.Error != null || _throneInstallation.Enabled && _throneReadError);
         ThroneControls.Visibility = connected ? Visibility.Visible : Visibility.Collapsed;
         ThroneSetup.Visibility = connected ? Visibility.Collapsed : Visibility.Visible;
         ThroneSetupTitle.Text = _throneLoading ? "Подключаюсь…" : !capable ? "Нужна новая версия Throne" : "Подключи API Throne";
         ThroneSetupText.Text = !capable ? "Управление доступно в версии с API. Скачаем актуальный установщик, включая бета-версии."
             : "В Throne: Настройки → Настройки интеграции → Throne API → Включить. Затем нажми обновление сверху.";
         ThroneUpdate.Visibility = !capable ? Visibility.Visible : Visibility.Collapsed;
-        ThroneBrowse.Visibility = !connected ? Visibility.Visible : Visibility.Collapsed;
+        // A disabled API is normal setup, not a failed executable lookup. Keep
+        // manual recovery out of the normal screen and reveal only the relevant
+        // picker after discovery/connection has actually failed.
+        ThroneBrowse.Visibility = recovery && executableMissing ? Visibility.Visible : Visibility.Collapsed;
+        ThroneDataFolder.Visibility = recovery && !executableMissing && configurationProblem ? Visibility.Visible : Visibility.Collapsed;
         ThroneUpdate.IsEnabled = !_throneLoading;
         ThroneUpdate.Content = _throneDownloading ? "Отменить загрузку" : "Обновить Throne";
         ThroneRefresh.IsEnabled = !_throneBusy && !_throneLoading && !_throneTesting;

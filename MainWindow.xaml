@@ -1324,7 +1324,7 @@
                             <Grid Height="32">
                                 <Button Style="{StaticResource BackButton}" Content="THRONE" Click="SettingsBack_Click" HorizontalAlignment="Left" Width="210"/>
                                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
-                                    <Button x:Name="ThroneDataFolder" Style="{StaticResource IconButton}" Width="32" Height="32" ToolTip="Папка данных Throne" Click="ThroneDataFolder_Click" AutomationProperties.Name="Выбрать папку данных Throne">
+                                    <Button x:Name="ThroneDataFolder" Style="{StaticResource IconButton}" Width="32" Height="32" ToolTip="Выбрать папку настроек" Click="ThroneDataFolder_Click" AutomationProperties.Name="Выбрать папку настроек Throne">
                                         <local:Icon Kind="Folder" Width="15" Height="15" Fill="{StaticResource Dim}"/>
                                     </Button>
                                     <Button x:Name="ThroneRefresh" Style="{StaticResource IconButton}" Width="32" Height="32" ToolTip="Обновить подключение" Click="ThroneRefresh_Click" AutomationProperties.Name="Обновить подключение Throne">
