@@ -16,6 +16,7 @@ public partial class MainWindow
     const double BubbleVisibleSplit = 0.01, BubbleClickableSplit = 0.75;
     const double RecordBubbleWidth = 78, TimerBubbleWidth = 78, ShelfBubbleWidth = 54, UpdateBubbleWidth = 38;
     const double BubbleOverlap = 11;
+    const double BubbleEdgePadding = 12;
     const double ShelfBubblePadding = 13, ShelfBubblePaddingWithTimer = 10;
     const double MinViewScale = 0.5, MaxViewScale = 1.15;
     const double MotionBlurSpeed = 650;
@@ -238,6 +239,9 @@ public partial class MainWindow
         double seams = record * timer + timer * shelf + record * shelf * (1 - Math.Clamp(timer, 0, 1))
             + update * (1 - (1 - Math.Clamp(record, 0, 1)) * (1 - Math.Clamp(timer, 0, 1)) * (1 - Math.Clamp(shelf, 0, 1)));
         double wide = Math.Max(RecordBubbleWidth * record + TimerBubbleWidth * timer + _shelfBubbleWidth.Value * shelf + UpdateBubbleWidth * update - BubbleOverlap * seams, Bubble.Height);
+        // Windows can clamp a transparent HWND to a small monitor's width. Fit the
+        // complete bubble there; enlarging the requested Window.Width alone is insufficient.
+        bubble = FitBubbleScale(ActualWidth > 0 ? ActualWidth : Width, _userScale.Value, pill.Width, scale, wide, bubble);
         bool apart = split > BubbleVisibleSplit;
         Bubble.SetVisible(apart);
         Bubble.Width = wide;
@@ -251,14 +255,21 @@ public partial class MainWindow
         BubbleUpdate.IsHitTestVisible = UpdateBubblePending;
         double tuck = Math.Max(r - Bubble.Height / 2, 0) * BubbleTuckFactor * (1 - Math.Clamp(split, 0, 1)) * scale;
         BubbleMove.X = (pill.Width * scale - wide) / 2 + (BubbleGap + wide) * split - tuck;
+        BubbleMove.Y = Bubble.Height * (1 - bubble) / 2;
         BubbleScale.ScaleX = BubbleScale.ScaleY = bubble;
         BubbleBody.Opacity = Math.Clamp(split * 4 - 3, 0, 1) * (_cinemaDimmed ? 0.48 : 1);
         Bubble.IsHitTestVisible = split > BubbleClickableSplit && _bubbleSplit.Target > 0;
 
         double past = ((BubbleGap + wide) * split - wide - tuck) / scale;
         Body.SetShape(pill, r, apart
-            ? new Rect(pill.Right + past, 0, wide * bubble / scale, Bubble.Height * bubble / scale)
+            ? new Rect(pill.Right + past, BubbleMove.Y / scale, wide * bubble / scale, Bubble.Height * bubble / scale)
             : Rect.Empty);
+    }
+
+    internal static double FitBubbleScale(double hostWidth, double userScale, double pillWidth, double pillScale, double bubbleWidth, double desired)
+    {
+        double available = hostWidth / (2 * Math.Max(userScale, MinScale)) - pillWidth * pillScale / 2 - BubbleGap - BubbleEdgePadding;
+        return Math.Max(MinScale, Math.Min(desired, available / Math.Max(bubbleWidth, 1)));
     }
 
     void FitViews(double w, double h)

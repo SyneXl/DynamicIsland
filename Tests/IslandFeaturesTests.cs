@@ -242,9 +242,19 @@ static partial class Program
             Check(Call(window, "BubblePanelAt", 25d)!.ToString() == "Record" && Call(window, "BubblePanelAt", 90d)!.ToString() == "Timer"
                 && Call(window, "BubblePanelAt", ((FrameworkElement)window.FindName("Bubble")).Width - 2)!.ToString() == "Update",
                 "recording, timer, shelf and update coexist with distinct hit regions");
-            // Worst compact lyric width plus all bubble parts must remain inside the actual HWND.
-            double worstRight = window.Width / 2 + (440 * 1.07 / 2 + ((FrameworkElement)window.FindName("Bubble")).Width * 1.07 + 7) * 1.3;
-            Check(worstRight + 3 < window.Width, "transparent window reserves room for the widest lyrics and all side-bubble parts at maximum scale");
+            // Validate actual transformed HWND bounds, including a small virtual monitor.
+            Set(window, "_compactMediaWidth", 440d); Call(window, "MorphTo", Enum.Parse(viewType, "Media"));
+            foreach (Spring spring in (Spring[])typeof(MainWindow).GetField("_springs", Private)!.GetValue(window)!) spring.Snap(spring.Target);
+            ((Spring)typeof(MainWindow).GetField("_userScale", Private)!.GetValue(window)!).Snap(1.3);
+            ((Spring)typeof(MainWindow).GetField("_scale", Private)!.GetValue(window)!).Snap(1.07);
+            Call(window, "ApplyShape"); window.UpdateLayout();
+            var bubbleView = (FrameworkElement)window.FindName("Bubble");
+            Rect bubbleBounds = bubbleView.TransformToAncestor(window).TransformBounds(new Rect(0, 0, bubbleView.ActualWidth, bubbleView.ActualHeight));
+            Check(bubbleBounds.Right + 3 < window.ActualWidth,
+                $"widest lyrics and all bubbles fit actual HWND at maximum scale (right={bubbleBounds.Right:0.0}, host={window.ActualWidth:0.0})");
+            double fit = MainWindow.FitBubbleScale(1024, 1.3, 440, 1.07, 215, 1.07);
+            Check(1024 / 2d + (440 * 1.07 / 2 + 7 + 215 * fit) * 1.3 + 3 < 1024,
+                "a narrow 1024-DIP host also fits all bubble segments without clipping");
             Set(obs, "<Recording>k__BackingField", false); countdown.Stop(); Call(window, "EndTransient");
             Call(window, "ReplayUpdateNotice");
             Check(!notice.Pending && View() == "Notice", "clicking bubble replays notice and consumes bubble immediately");
@@ -275,7 +285,7 @@ static partial class Program
         IMMDevice? device = AudioEndpoint.Default();
         Check(device != null, "native mixer fixture has a Windows audio output");
         IAudioClient? player = device!.Activate<IAudioClient>();
-        Marshal.ReleaseComObject(device);
+        Marshal.ReleaseComObject(device!);
         Check(player != null, "native mixer fixture activates its own shared-mode audio client");
         IntPtr format = IntPtr.Zero;
         object? render = null;
