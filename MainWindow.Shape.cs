@@ -14,7 +14,7 @@ public partial class MainWindow
     const double BubbleGap = 7;
     const double BubbleTuckFactor = 1.6;
     const double BubbleVisibleSplit = 0.01, BubbleClickableSplit = 0.75;
-    const double RecordBubbleWidth = 78, TimerBubbleWidth = 78, ShelfBubbleWidth = 54, UpdateBubbleWidth = 38;
+    const double RecordBubbleWidth = 78, TimerBubbleWidth = 78, ShelfBubbleWidth = 54, UpdateBubbleWidth = 34;
     const double BubbleOverlap = 11;
     const double BubbleEdgePadding = 12;
     const double ShelfBubblePadding = 13, ShelfBubblePaddingWithTimer = 10;

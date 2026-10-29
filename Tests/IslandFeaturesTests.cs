@@ -128,6 +128,7 @@ static partial class Program
         _ = new Application { ShutdownMode = ShutdownMode.OnExplicitShutdown };
         typeof(App).GetField("<SmokeTest>k__BackingField", BindingFlags.Static | BindingFlags.NonPublic)!.SetValue(null, true);
         typeof(Settings).GetField("_glass", BindingFlags.Static | BindingFlags.NonPublic)!.SetValue(null, false);
+        typeof(Settings).GetField("_quietWhenIdle", BindingFlags.Static | BindingFlags.NonPublic)!.SetValue(null, false);
         var window = new MainWindow();
         window.Loaded += (_, _) => { window.Left = -10000; window.Top = -10000; };
         window.Show(); Pump(400);
@@ -277,6 +278,7 @@ static partial class Program
             Check((bool)typeof(MainWindow).GetProperty("UpdateBubblePending", Private)!.GetValue(window)!, "initial notice collapses to a pending update bubble");
             Check(((FrameworkElement)window.FindName("Bubble")).Visibility == Visibility.Visible, "update bubble participates in the existing side bubble");
             Capture("update-bubble-with-shelf");
+            UpdateBubbleGeometryTests(window, shelf, output);
             Check(Call(window, "BubblePanelAt", ((FrameworkElement)window.FindName("Bubble")).Width - 2)!.ToString() == "Update", "combined shelf/update bubble has a dedicated update hit region");
             var obs = typeof(MainWindow).GetField("_obs", Private)!.GetValue(window)!;
             Set(obs, "<Recording>k__BackingField", true);
@@ -398,6 +400,57 @@ static partial class Program
             }
             if (own != null) Check(restored, "owned test session settings are restored");
         }
+    }
+
+    static void UpdateBubbleGeometryTests(MainWindow window, Shelf shelf, string output)
+    {
+        var root = (FrameworkElement)window.FindName("Root");
+        var bubble = (FrameworkElement)window.FindName("Bubble");
+        var icon = (FrameworkElement)window.FindName("BubbleUpdateIcon");
+        var body = (Goo)window.FindName("Body");
+        var springs = (Spring[])typeof(MainWindow).GetField("_springs", Private)!.GetValue(window)!;
+        var userScale = (Spring)typeof(MainWindow).GetField("_userScale", Private)!.GetValue(window)!;
+        double wasScale = userScale.Target;
+        void Settle()
+        {
+            Call(window, "UpdateTargets");
+            foreach (Spring spring in springs) spring.Snap(spring.Target);
+            Call(window, "ApplyShape"); root.UpdateLayout();
+        }
+        Point Center(FrameworkElement element) => element.TransformToAncestor(window).Transform(new Point(element.ActualWidth / 2, element.ActualHeight / 2));
+        try
+        {
+            Set(window, "_shelf", new Shelf(Dispatcher.CurrentDispatcher, Path.Combine(output, "empty-bubble-shelf"), [], _ => { }));
+            Call(window, "SyncShelf"); Settle();
+            Rect glyph = icon.TransformToAncestor(bubble).TransformBounds(new Rect(0, 0, icon.ActualWidth, icon.ActualHeight));
+            var measurements = new { bubbleWidth = bubble.Width, bubbleHeight = bubble.Height,
+                leftPadding = glyph.Left, rightPadding = bubble.Width - glyph.Right,
+                topPadding = glyph.Top, bottomPadding = bubble.Height - glyph.Bottom };
+            File.WriteAllText(Path.Combine(output, "update-bubble-geometry.json"), JsonSerializer.Serialize(measurements));
+            Save(root, Path.Combine(output, "update-bubble-alone.png"));
+            Check(Math.Abs(bubble.Width - bubble.Height) < .001, $"standalone update bubble is circular, not an oversized capsule ({bubble.Width} x {bubble.Height})");
+            Check(Math.Abs(glyph.Left - (bubble.Width - glyph.Right)) < .001 && Math.Abs(glyph.Top - (bubble.Height - glyph.Bottom)) < .001,
+                "update icon has equal left/right and top/bottom padding, including the border inset");
+            foreach (double scale in new[] { .75, 1, 1.25, 1.3 })
+                foreach (string state in new[] { "normal", "hover", "pressed" })
+                {
+                    userScale.Snap(scale); Set(window, "_bubbleHovered", state == "hover"); Set(window, "_bubblePressed", state == "pressed"); Settle();
+                    Rect inside = body.BubbleInside.Box;
+                    Point outlineCenter = body.TransformToAncestor(window).Transform(new Point(inside.X + inside.Width / 2, inside.Y + inside.Height / 2));
+                    Check((Center(icon) - outlineCenter).Length < .001 && (Center(bubble) - outlineCenter).Length < .001,
+                        $"icon, hit target and drawn circle share the same center at scale {scale:0.##}, {state}");
+                }
+            Check(new[] { 0d, bubble.Width / 2, bubble.Width - .01 }.All(x => Call(window, "BubblePanelAt", x)!.ToString() == "Update"),
+                "the complete standalone circular bubble remains clickable for updates");
+        }
+        finally
+        {
+            Set(window, "_bubbleHovered", false); Set(window, "_bubblePressed", false); userScale.Snap(wasScale);
+            Set(window, "_shelf", shelf); Call(window, "SyncShelf"); Settle();
+        }
+        Rect combinedGlyph = icon.TransformToAncestor(bubble).TransformBounds(new Rect(0, 0, icon.ActualWidth, icon.ActualHeight));
+        Check(Math.Abs(combinedGlyph.X + combinedGlyph.Width / 2 - (bubble.Width - bubble.Height / 2)) < .001,
+            "combined shelf/update bubble centers the icon in its right circular end");
     }
 
     static int NativeMixerIntegration(string output)
