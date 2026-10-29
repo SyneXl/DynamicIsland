@@ -46,7 +46,7 @@ public partial class MainWindow
         {
             _recordPauseShown = paused;
             SwapIcons(paused ? RecordPauseIcon : RecordResumeIcon, paused ? RecordResumeIcon : RecordPauseIcon, RecordBigView.IsVisible);
-            _recordTint.BeginAnimation(SolidColorBrush.ColorProperty, new ColorAnimation((paused ? _orange : _red).Color, Ms(300)));
+            SyncRecordTint(Ms(300));
             Puddle.SetTint(RecordPauseButton, paused ? _orange.Color : Colors.White);
             Color disc = paused ? _orange.Color.WithAlpha(ResumeDiscAlpha) : Colors.White.WithAlpha(PauseDiscAlpha);
             _recordPauseDisc.BeginAnimation(SolidColorBrush.ColorProperty, new ColorAnimation(disc, Ms(300)));
@@ -120,12 +120,16 @@ public partial class MainWindow
 
     void BeatRecordDots()
     {
+        if (IsQuietAppearance) return;
         var beat = new DoubleAnimationUsingKeyFrames { Duration = RecordBeat };
         beat.KeyFrames.Add(new EasingDoubleKeyFrame(RecordBeatLow, KeyTime.FromPercent(0.45), new SineEase { EasingMode = EasingMode.EaseInOut }));
         beat.KeyFrames.Add(new EasingDoubleKeyFrame(1, KeyTime.FromPercent(1), new SineEase { EasingMode = EasingMode.EaseInOut }));
         foreach (UIElement dot in new UIElement[] { RecordDot, BubbleRecordDot, RecordBigDot })
             if (dot.IsVisible) dot.BeginAnimation(OpacityProperty, beat);
     }
+
+    void SyncRecordTint(Duration time) => _recordTint.BeginAnimation(SolidColorBrush.ColorProperty,
+        new ColorAnimation(IsQuietAppearance ? QuietTimerColor : (_obs.Paused ? _orange : _red).Color, time));
 
     void OnRecordingSaved(string path, TimeSpan length)
     {

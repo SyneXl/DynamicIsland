@@ -671,6 +671,7 @@
 
             <Border x:Name="Pill" Background="Transparent" HorizontalAlignment="Center" VerticalAlignment="Top"/>
 
+            <Grid x:Name="IslandContent">
             <Grid x:Name="Host">
 
                 <Grid x:Name="IdleView" Width="118" Height="34" HorizontalAlignment="Center" VerticalAlignment="Top">
@@ -1644,6 +1645,14 @@
                                                       HorizontalAlignment="Right" VerticalAlignment="Center"/>
                                     </Grid>
                                 </Button>
+                                <Button x:Name="QuietAppearanceRow" Style="{StaticResource RowButton}" Click="QuietAppearance_Click"
+                                        ToolTip="Сохраняет текст и эквалайзер" AutomationProperties.Name="Приглушать без наведения">
+                                    <Grid>
+                                        <local:Icon Style="{StaticResource RowIcon}" Kind="Moon"/>
+                                        <TextBlock Style="{StaticResource RowLabel}" Text="Приглушать без наведения" Margin="29,0,52,0"/>
+                                        <local:Toggle x:Name="QuietAppearanceSwitch" Style="{StaticResource RowSwitch}"/>
+                                    </Grid>
+                                </Button>
                                 <Button Style="{StaticResource RowButton}" Click="Glass_Click">
                                     <Grid>
                                         <local:Icon Style="{StaticResource RowIcon}" Kind="Sparkle"/>
@@ -2030,6 +2039,7 @@
                     </local:Icon>
                 </Button>
             </Canvas>
+            </Grid>
         </Grid>
 
         <Border x:Name="Bubble" Width="78" Height="34" CornerRadius="17" Visibility="Collapsed"
@@ -2063,7 +2073,7 @@
                                   VerticalAlignment="Center" Margin="4,0,0,0"/>
                 </StackPanel>
                 <Grid x:Name="BubbleUpdate" Width="38" HorizontalAlignment="Right" ToolTip="Доступно обновление">
-                    <local:Icon Kind="Update" Width="17" Height="17" Fill="{StaticResource Indigo}"/>
+                    <local:Icon x:Name="BubbleUpdateIcon" Kind="Update" Width="17" Height="17" Fill="{StaticResource Indigo}"/>
                 </Grid>
             </Grid>
         </Border>

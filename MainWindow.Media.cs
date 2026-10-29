@@ -131,7 +131,7 @@ public partial class MainWindow
     void SyncRim()
     {
         bool music = !_media.HomeSelected && _media.HasTrack && (_cover != null || Settings.Accent != null) && (IsMediaActive || _view == View.MediaBig);
-        Color? tint = _cinemaDimmed ? Colors.Transparent : Settings.Rim && music ? AccentColor : null;
+        Color? tint = IsPassiveAppearance ? Colors.Transparent : Settings.Rim && music ? AccentColor : null;
         if (tint == _rimColor) return;
         _rimColor = tint;
         Body.Tint(tint, TintTime);
@@ -172,7 +172,7 @@ public partial class MainWindow
     void SyncEq()
     {
         bool visible = IsEqVisible && !_hiddenByFullscreen;
-        _eqLoop.ShortestStep = _cinemaDimmed ? 1.0 / 30 : EqFrameSeconds;
+        _eqLoop.ShortestStep = IsPassiveAppearance ? 1.0 / 30 : EqFrameSeconds;
         _spectrum.Active = visible && _media.IsPlaying;
         if (visible) _eqLoop.Start();
         else _eqLoop.Stop();
@@ -191,7 +191,7 @@ public partial class MainWindow
         }
 
         bool moving = Eq.Tick(bands, level, playing, now, dt);
-        if (!_cinemaDimmed && _view == View.MediaBig)
+        if (!IsPassiveAppearance && _view == View.MediaBig)
             moving |= Settings.Backdrop == Backdrop.Glow ? Glow.Tick(Eq, now, dt) : AdvanceBackdrop(bands, playing, now, dt);
         return IsEqVisible && !_hiddenByFullscreen && (playing || moving);
     }

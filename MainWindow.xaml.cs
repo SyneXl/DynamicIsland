@@ -190,6 +190,11 @@ public partial class MainWindow : Window
         _transientTimeout = new DelayedAction(EndTransient);
         _collapseTimeout = new DelayedAction(Collapse);
         _awayTimeout = new DelayedAction(ReturnFromAway);
+        _quietAppearanceTimeout = new DelayedAction(() =>
+        {
+            _quietAppearanceScheduled = false;
+            if (!_appearanceExiting) Safely(UpdateView);
+        });
         _overshootTimeout = new DelayedAction(ReleaseVolumeOvershoot);
         _dragLeaveTimeout = new DelayedAction(OnDragLeft);
         _placeSearch = new DelayedAction(SearchPlaces);
@@ -226,6 +231,9 @@ public partial class MainWindow : Window
         _ticker.Tick += (_, _) => TickSafely();
         Loaded += OnLoaded;
         Deactivated += OnDeactivated;
+        GotKeyboardFocus += (_, _) => SyncCinemaAppearance();
+        LostKeyboardFocus += (_, _) => Dispatcher.InvokeAsync(SyncCinemaAppearance);
+        Closed += (_, _) => { _appearanceExiting = true; _quietAppearanceScheduled = false; _quietAppearanceTimeout.Cancel(); };
         PreviewKeyDown += Shelf_PreviewKeyDown;
         Closing += (_, e) => { if (_panel == Panel.ShelfNote && !CommitShelfNote()) e.Cancel = true; };
     }
@@ -356,6 +364,9 @@ public partial class MainWindow : Window
 
     void Exit()
     {
+        if (_appearanceExiting) return;
+        _appearanceExiting = true;
+        _quietAppearanceTimeout.Cancel();
         _ticker.Stop();
         _alarm.Stop();
         _glass.Hide();

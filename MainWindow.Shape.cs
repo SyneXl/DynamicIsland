@@ -130,7 +130,7 @@ public partial class MainWindow
         Pill.Width = w;
         Pill.Height = h;
         Pill.CornerRadius = new CornerRadius(r);
-        Shadow.Opacity = _cinemaDimmed ? 0 : Math.Clamp((h - CompactMaxHeight) / ShadowFadeHeight, 0, 1);
+        Shadow.Opacity = IsPassiveAppearance ? 0 : Math.Clamp((h - CompactMaxHeight) / ShadowFadeHeight, 0, 1);
         if (pill != _clipRect || r != _clipRadius)
         {
             _clipRect = pill;
@@ -201,18 +201,18 @@ public partial class MainWindow
 
     void SyncGlass(bool animate)
     {
-        if (Settings.Glass && !_cinemaDimmed)
+        if (Settings.Glass && !IsPassiveAppearance)
         {
             _glass.Show();
             Reshape();
         }
-        if (_cinemaDimmed) _glass.Hide();
-        Body.Thin(Settings.Glass && !_cinemaDimmed, animate ? GlassTime : TimeSpan.Zero, HideGlassOnceCovered);
+        if (IsPassiveAppearance) _glass.Hide();
+        Body.Thin(Settings.Glass && !IsPassiveAppearance, animate ? GlassTime : TimeSpan.Zero, HideGlassOnceCovered);
     }
 
     void HideGlassOnceCovered()
     {
-        if (Settings.Glass && !_cinemaDimmed || !_glass.IsOn) return;
+        if (Settings.Glass && !IsPassiveAppearance || !_glass.IsOn) return;
         _glass.Hide();
         Reshape();
     }
@@ -257,7 +257,7 @@ public partial class MainWindow
         BubbleMove.X = (pill.Width * scale - wide) / 2 + (BubbleGap + wide) * split - tuck;
         BubbleMove.Y = Bubble.Height * (1 - bubble) / 2;
         BubbleScale.ScaleX = BubbleScale.ScaleY = bubble;
-        BubbleBody.Opacity = Math.Clamp(split * 4 - 3, 0, 1) * (_cinemaDimmed ? 0.48 : 1);
+        BubbleBody.Opacity = Math.Clamp(split * 4 - 3, 0, 1) * (_cinemaDimmed ? 0.48 : IsQuietAppearance ? QuietContentOpacity : 1);
         Bubble.IsHitTestVisible = split > BubbleClickableSplit && _bubbleSplit.Target > 0;
 
         double past = ((BubbleGap + wide) * split - wide - tuck) / scale;

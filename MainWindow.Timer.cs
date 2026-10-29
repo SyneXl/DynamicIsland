@@ -97,7 +97,8 @@ public partial class MainWindow
     {
         if (on == _urgent) return;
         _urgent = on;
-        _timerTint.BeginAnimation(SolidColorBrush.ColorProperty, new ColorAnimation(_cinemaDimmed ? QuietTimerColor : (on ? _red : _orange).Color, Ms(300)));
+        SyncCinemaAppearance();
+        _timerTint.BeginAnimation(SolidColorBrush.ColorProperty, new ColorAnimation(IsPassiveAppearance ? QuietTimerColor : (on ? _red : _orange).Color, Ms(300)));
     }
 
     void PulseTimer()

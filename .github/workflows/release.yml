@@ -45,6 +45,8 @@ jobs:
         run: dotnet run --project Tests/DynamicIsland.Tests.csproj -c Release --no-build -- --updater-tests
       - name: Update bubble, mixer and shelf controls
         run: dotnet run --project Tests/DynamicIsland.Tests.csproj -c Release --no-build -- --island-features-tests artifacts/island-features
+      - name: Quiet appearance and interaction transitions
+        run: dotnet run --project Tests/DynamicIsland.Tests.csproj -c Release --no-build -- --quiet-appearance-tests artifacts/quiet-appearance
       - name: Windows mixer coupling, compensation and icon controls
         run: dotnet run --project Tests/DynamicIsland.Tests.csproj -c Release --no-build -- --mixer-parity-tests artifacts/mixer-parity
       - name: Throne integration controls

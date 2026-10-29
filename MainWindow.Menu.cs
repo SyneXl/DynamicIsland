@@ -376,6 +376,7 @@ public partial class MainWindow
         SeekStyleSegments.Set(Settings.LineBar ? 1 : 0, LookView.IsVisible);
         SeekHoverSegments.Set((int)Settings.SeekHover, LookView.IsVisible);
         GlassSwitch.Set(Settings.Glass, LookView.IsVisible);
+        QuietAppearanceSwitch.Set(Settings.QuietWhenIdle, LookView.IsVisible);
         ((RadioButton)BackdropStrip.Children[(int)Settings.Backdrop]).IsChecked = true;
         ((RadioButton)LyricChangeStrip.Children[(int)Settings.LyricChange]).IsChecked = true;
         ((RadioButton)HoverStrip.Children[(int)Settings.Hover]).IsChecked = true;

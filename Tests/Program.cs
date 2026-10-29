@@ -35,6 +35,7 @@ static partial class Program
         if (args is ["--tooltip-preview", var tooltipPreview]) return ToolTipPreview(tooltipPreview);
         if (args is ["--updater-tests"]) return UpdaterTests().GetAwaiter().GetResult();
         if (args is ["--island-features-tests", var featureOutput]) return IslandFeaturesTests(featureOutput);
+        if (args is ["--quiet-appearance-tests", var quietOutput]) return QuietAppearanceTests(quietOutput);
         if (args is ["--native-mixer-test", var nativeOutput]) return NativeMixerIntegration(nativeOutput);
         if (args is ["--mixer-parity-tests", var parityOutput]) return MixerParityTests(parityOutput);
         if (args is ["--native-mixer-parity", var nativeParityOutput]) return NativeMixerParity(nativeParityOutput);

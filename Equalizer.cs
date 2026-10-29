@@ -1,6 +1,7 @@
 using System.Diagnostics.CodeAnalysis;
 using System.Windows;
 using System.Windows.Media;
+using System.Windows.Media.Animation;
 
 namespace DynamicIsland;
 
@@ -24,9 +25,21 @@ public sealed class Equalizer : FrameworkElement
         new FrameworkPropertyMetadata(Brushes.White, FrameworkPropertyMetadataOptions.AffectsRender));
     public static readonly DependencyProperty QuietProperty = DependencyProperty.Register(
         nameof(Quiet), typeof(bool), typeof(Equalizer),
+        new FrameworkPropertyMetadata(false, FrameworkPropertyMetadataOptions.AffectsRender,
+            (d, e) => ((Equalizer)d).AnimateQuiet((bool)e.NewValue)));
+    public static readonly DependencyProperty KeepStyleWhenQuietProperty = DependencyProperty.Register(
+        nameof(KeepStyleWhenQuiet), typeof(bool), typeof(Equalizer),
         new FrameworkPropertyMetadata(false, FrameworkPropertyMetadataOptions.AffectsRender));
+    static readonly DependencyProperty QuietAmountProperty = DependencyProperty.Register(
+        "QuietAmount", typeof(double), typeof(Equalizer),
+        new FrameworkPropertyMetadata(0d, FrameworkPropertyMetadataOptions.AffectsRender));
 
     public bool Quiet { get => (bool)GetValue(QuietProperty); set => SetValue(QuietProperty, value); }
+    public bool KeepStyleWhenQuiet { get => (bool)GetValue(KeepStyleWhenQuietProperty); set => SetValue(KeepStyleWhenQuietProperty, value); }
+
+    void AnimateQuiet(bool quiet) => BeginAnimation(QuietAmountProperty,
+        new DoubleAnimation(quiet ? 1 : 0, TimeSpan.FromMilliseconds(quiet ? 240 : 180))
+        { EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } });
 
     readonly Shades _shades = new();
 
@@ -159,6 +172,7 @@ public sealed class Equalizer : FrameworkElement
         if (w <= 0 || h <= 0) return;
 
         Color fill = Fill.Color;
+        double quietScale = 1 - .66 * (double)GetValue(QuietAmountProperty);
         double standing = Few + (_bars - Few) * _open;
         double gap = (w - standing * BarWidth) / Math.Max(standing - 1, 1), x = 0;
         for (int bar = 0; bar < _bars; bar++)
@@ -166,8 +180,8 @@ public sealed class Equalizer : FrameworkElement
             double presence = Math.Clamp(standing - _bandOfBar[bar], 0, 1);
             if (presence > Absent)
             {
-                if (_dots && !Quiet) DrawDots(dc, fill, x, h, _levels[bar], presence);
-                else DrawBar(dc, fill, x, h, _levels[bar] * (Quiet ? 0.34 : 1), presence);
+                if (_dots && (!Quiet || KeepStyleWhenQuiet)) DrawDots(dc, fill, x, h, _levels[bar] * quietScale, presence);
+                else DrawBar(dc, fill, x, h, _levels[bar] * quietScale, presence);
             }
             x += presence * (BarWidth + gap);
         }

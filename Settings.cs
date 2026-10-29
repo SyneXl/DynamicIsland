@@ -64,6 +64,7 @@ static class Settings
     static bool _dots = ReadSwitch(nameof(Dots), false);
     static bool _lineBar = ReadSwitch(nameof(LineBar));
     static bool _glass = ReadSwitch(nameof(Glass), false);
+    static bool _quietWhenIdle = ReadSwitch(nameof(QuietWhenIdle), false);
     static Backdrop _backdrop = (Backdrop)Math.Clamp(Read(nameof(Backdrop), 0), 0, (int)Backdrop.MatrixAndStars);
     static LyricChange _lyricChange = (LyricChange)Math.Clamp(Read(nameof(LyricChange), (int)LyricChange.Wave), 0, (int)LyricChange.Drum);
     static LyricSource _lyricSources = Known((LyricSource)Read(nameof(LyricSources), (int)LyricSource.Usual));
@@ -115,6 +116,15 @@ static class Settings
     {
         get => _glass;
         set => Write(nameof(Glass), _glass = value);
+    }
+
+    public static bool QuietWhenIdle => _quietWhenIdle;
+
+    public static bool TrySetQuietWhenIdle(bool value)
+    {
+        if (!Write(nameof(QuietWhenIdle), value ? 1 : 0, RegistryValueKind.DWord)) return false;
+        _quietWhenIdle = value;
+        return true;
     }
 
     public static Backdrop Backdrop
