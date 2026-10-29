@@ -19,7 +19,7 @@ public partial class MainWindow
 
     bool IsPassiveAppearance => _passiveAppearance != PassiveAppearance.Normal;
     bool IsQuietAppearance => _passiveAppearance == PassiveAppearance.Quiet;
-    const double QuietBodyOpacity = .58, QuietContentOpacity = .9;
+    const double QuietOpacity = .4, QuietBodyOpacity = .55;
 
     bool ShouldDimCinema => _cinemaMode && _panel == Panel.None && _transientView == null
         && !_hovered && !_bubbleHovered && !_pressed && !_bubblePressed && !_ringing && !_pickingArea;
@@ -65,12 +65,11 @@ public partial class MainWindow
         if (next == _passiveAppearance) return;
         _passiveAppearance = next;
         bool dim = IsPassiveAppearance;
-        // Separate body/content alpha keeps the image visible through the pill.
-        // No frame capture, scene-dependent tint, live blur or DWM dependency.
+        // One shared fade dims ALL compact content, including the side bubble.
+        // The extra body alpha lets the background recede further than the text.
         var time = Ms(_cinemaDimmed ? 300 : quiet ? 240 : 180);
-        Root.BeginAnimation(OpacityProperty, new DoubleAnimation(_cinemaDimmed ? .28 : 1, time));
+        Root.BeginAnimation(OpacityProperty, new DoubleAnimation(_cinemaDimmed ? .28 : quiet ? QuietOpacity : 1, time));
         Body.BeginAnimation(OpacityProperty, new DoubleAnimation(_cinemaDimmed ? .48 : quiet ? QuietBodyOpacity : 1, time));
-        IslandContent.BeginAnimation(OpacityProperty, new DoubleAnimation(quiet ? QuietContentOpacity : 1, time));
         _timerTint.BeginAnimation(SolidColorBrush.ColorProperty,
             new ColorAnimation(dim ? QuietTimerColor : (_urgent ? _red : _orange).Color, time));
         SyncRecordTint(time);

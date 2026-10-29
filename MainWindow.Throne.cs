@@ -29,6 +29,8 @@ public partial class MainWindow
     string _throneMessage = "";
     ThroneInstallerFile? _throneInstallerFile;
     readonly ThroneInstaller _throneInstaller = new();
+    Func<ProcessStartInfo, CancellationToken, Task> _runThroneInstaller = ThroneInstaller.RunAsync;
+    bool _throneInstalling;
     CancellationTokenSource? _throneDownloadCancel;
     IntPtr _throneTypedAfter;
 
@@ -48,8 +50,12 @@ public partial class MainWindow
     void ThroneBack_Click(object sender, RoutedEventArgs e) { ShowPanel(Panel.Throne); SyncThrone(); }
     void PollThrone()
     {
-        if (_throneApi != null && !_throneBusy && !_throneLoading && !_throneClosed && Environment.TickCount64 - _thronePolledAt > 2000)
-            _ = RefreshThroneAsync(false);
+        // While this page is open, also notice installs and API setup changes.
+        // Healthy connections only need their lightweight status request.
+        bool discover = _throneApi == null || _throneReadError || _throneInstallation?.Capable != true;
+        if (!_throneBusy && !_throneLoading && !_throneTesting && !_throneClosed
+            && Environment.TickCount64 - _thronePolledAt > (discover ? 5000 : 2000))
+            _ = RefreshThroneAsync(discover);
     }
     Task RefreshThroneAsync(bool discover)
     {
@@ -177,7 +183,10 @@ public partial class MainWindow
             foreach (Button row in rows.Children.OfType<Button>()) row.IsEnabled = connected && !changing && !_throneLoading && !_throneTesting;
         ThroneNote.Text = _throneMessage;
         ThroneNote.Visibility = _throneMessage.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
-        ThroneInstallOffer.Visibility = _throneInstallerFile == null ? Visibility.Collapsed : Visibility.Visible;
+        // Keep the downloaded file, not its obsolete call to action. API may be
+        // disabled in a compatible install; that calls for setup, not reinstall.
+        ThroneInstallOffer.Visibility = _throneInstallerFile != null && !capable && !connected ? Visibility.Visible : Visibility.Collapsed;
+        ThroneRunInstaller.IsEnabled = !_throneInstalling;
         ThroneContent.Measure(new Size(340, double.PositiveInfinity));
         ThroneView.Height = Math.Clamp(ThroneContent.DesiredSize.Height, 220, 480);
         if (_view == View.Throne) UpdateTargets();
@@ -372,17 +381,30 @@ public partial class MainWindow
         catch (Exception ex) { _throneMessage = ex is InvalidDataException ? ex.Message : "Не удалось скачать Throne. Попробуй ещё раз"; }
         finally { _throneDownloading = false; _throneDownloadCancel = null; if (!_throneClosed) SyncThrone(); }
     }
-    async void ThroneRunInstaller_Click(object sender, RoutedEventArgs e)
+    async void ThroneRunInstaller_Click(object sender, RoutedEventArgs e) => await RunThroneInstallerAsync();
+
+    async Task RunThroneInstallerAsync()
     {
-        if (_throneInstallerFile is not { } file || !ThroneRunInstaller.IsEnabled) return;
-        ThroneRunInstaller.IsEnabled = false;
+        if (_throneInstallerFile is not { } file || _throneInstalling || _throneClosed
+            || _throneInstallation?.Capable == true || _throneStatus != null && _throneApi != null) return;
+        _throneInstalling = true; _throneMessage = ""; SyncThrone();
         try
         {
             if (!await ThroneInstaller.VerifyAsync(file, _throneLifetime.Token)) { _throneMessage = "Установщик изменился. Скачай его снова"; _throneInstallerFile = null; return; }
-            Process.Start(new ProcessStartInfo(file.Path) { UseShellExecute = true });
+            _throneLifetime.Token.ThrowIfCancellationRequested();
+            if (_throneInstallation?.Capable == true || _throneStatus != null && _throneApi != null) return;
+            await _runThroneInstaller(new ProcessStartInfo(file.Path)
+            {
+                UseShellExecute = true, Verb = "runas", WorkingDirectory = Path.GetDirectoryName(file.Path)!
+            }, _throneLifetime.Token);
+            // Exiting the installer is not proof of success. Rediscover the
+            // actual executable/API; cancelled or failed installs keep the offer.
+            if (_throneRefreshTask is { IsCompleted: false } pending) await pending;
+            await RefreshThroneAsync(true);
         }
         catch (OperationCanceledException) when (_throneClosed) { }
+        catch (System.ComponentModel.Win32Exception ex) when (ex.NativeErrorCode == 1223) { _throneMessage = "Запуск отменён"; }
         catch { _throneMessage = "Установщик не запущен"; }
-        finally { if (!_throneClosed) { ThroneRunInstaller.IsEnabled = true; SyncThrone(); } }
+        finally { _throneInstalling = false; if (!_throneClosed) SyncThrone(); }
     }
 }

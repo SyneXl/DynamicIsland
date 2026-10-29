@@ -257,7 +257,7 @@ public partial class MainWindow
         BubbleMove.X = (pill.Width * scale - wide) / 2 + (BubbleGap + wide) * split - tuck;
         BubbleMove.Y = Bubble.Height * (1 - bubble) / 2;
         BubbleScale.ScaleX = BubbleScale.ScaleY = bubble;
-        BubbleBody.Opacity = Math.Clamp(split * 4 - 3, 0, 1) * (_cinemaDimmed ? 0.48 : IsQuietAppearance ? QuietContentOpacity : 1);
+        BubbleBody.Opacity = Math.Clamp(split * 4 - 3, 0, 1) * (_cinemaDimmed ? 0.48 : 1);
         Bubble.IsHitTestVisible = split > BubbleClickableSplit && _bubbleSplit.Target > 0;
 
         double past = ((BubbleGap + wide) * split - wide - tuck) / scale;

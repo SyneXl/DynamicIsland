@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.IO;
 using System.Net;
 using System.Net.Http;
@@ -17,6 +18,12 @@ sealed class ThroneInstaller
     const long MaxSize = 512L << 20;
     readonly HttpClient _http;
     public ThroneInstaller(HttpClient? http = null) => _http = http ?? SharedHttp;
+    internal static async Task RunAsync(ProcessStartInfo start, CancellationToken cancel)
+    {
+        using var process = Process.Start(start) ?? throw new IOException("Установщик не запущен");
+        // Cancelling the island's lifetime releases the wait, never kills setup.
+        await process.WaitForExitAsync(cancel);
+    }
     static readonly HttpClient SharedHttp = CreateHttp();
     static HttpClient CreateHttp()
     {

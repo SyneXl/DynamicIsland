@@ -1,4 +1,5 @@
 using System.Buffers.Binary;
+using System.Diagnostics;
 using System.IO;
 using System.Net;
 using System.Net.Http;
@@ -302,7 +303,94 @@ static partial class Program
         Set(window, "_throneStatus", new ThroneStatus("idle", -1, "", 11)); Call(window, "SyncThrone");
         Check(((Button)window.FindName("ThroneBrowse")).Visibility == Visibility.Collapsed && ((Button)window.FindName("ThroneDataFolder")).Visibility == Visibility.Collapsed,
             "successful reconnection automatically hides both manual controls again");
-        window.Close();
+        ThroneInstallerWindowTests(window, output, Capture);
+    }
+
+    static void ThroneInstallerWindowTests(MainWindow window, string output, Action<string> capture)
+    {
+        void Sync() => Call(window, "SyncThrone");
+        bool Offered() => ((FrameworkElement)window.FindName("ThroneInstallOffer")).Visibility == Visibility.Visible;
+        void Complete(Task task)
+        {
+            var watch = Stopwatch.StartNew();
+            while (!task.IsCompleted && watch.Elapsed < TimeSpan.FromSeconds(5)) Pump(10);
+            Check(task.IsCompleted, "installer fixture completes without waiting for a real setup process");
+            task.GetAwaiter().GetResult();
+        }
+        string directory = Path.GetFullPath(Path.Combine(output, "installer launch fixture")); Directory.CreateDirectory(directory);
+        string path = Path.Combine(directory, "Throne setup.exe");
+        byte[] bytes = UpdateBytes(); File.WriteAllBytes(path, bytes);
+        var installer = new ThroneInstallerFile(path, bytes.Length, Convert.ToHexString(SHA256.HashData(bytes)));
+        var legacy = new ThroneDiscoveryResult(path, directory, false, false, null, null);
+        var compatible = new ThroneDiscoveryResult(path, directory, true, false, null, null);
+        bool upgraded = false; int discoveries = 0, launches = 0;
+        Set(window, "_findThrone", (Func<ThronePreferences, ThroneDiscoveryResult>)(_ => { discoveries++; return upgraded ? compatible : legacy; }));
+        Set(window, "_throneApi", null!); Set(window, "_throneStatus", null!); Set(window, "_throneReadError", false);
+        Set(window, "_throneInstallation", legacy); Set(window, "_throneInstallerFile", installer); Sync();
+        Check(Offered(), "verified downloaded installer is offered for the legacy client");
+        capture("throne-installer-offer.png");
+        Set(window, "_thronePolledAt", Environment.TickCount64);
+        Call(window, "PollThrone");
+        Check(discoveries == 0, "recovery discovery respects its throttle rather than scanning on every UI tick");
+        upgraded = true; Set(window, "_thronePolledAt", Environment.TickCount64 - 6000); Call(window, "PollThrone");
+        Complete((Task)typeof(MainWindow).GetField("_throneRefreshTask", Private)!.GetValue(window)!);
+        Check(discoveries == 1 && !Offered(), "visible page rediscovers a new install and removes the whole installer block without restarting");
+        capture("throne-installer-hidden.png");
+        Check(((Button)window.FindName("ThroneUpdate")).Visibility == Visibility.Collapsed
+            && ((TextBlock)window.FindName("ThroneSetupText")).Text.Contains("API"), "compatible installation with disabled API gets setup guidance, not another installer");
+        Check(File.ReadAllBytes(path).SequenceEqual(bytes), "hiding the installer offer leaves the file in Downloads untouched");
+        var healthy = new ThroneFakeApi();
+        Set(window, "_throneApi", healthy); Set(window, "_thronePolledAt", Environment.TickCount64 - 3000); Call(window, "PollThrone");
+        Complete((Task)typeof(MainWindow).GetField("_throneRefreshTask", Private)!.GetValue(window)!);
+        Check(discoveries == 1 && healthy.Requests.Count == 1 && healthy.Requests[0].Path == "/v1/status",
+            "healthy API polling reads only status, without scanning installations or loading subscriptions");
+        Set(window, "_throneApi", null!); Set(window, "_throneStatus", null!);
+        Set(window, "_runThroneInstaller", (Func<ProcessStartInfo, CancellationToken, Task>)((_, _) => { launches++; return Task.CompletedTask; }));
+        Complete((Task)Call(window, "RunThroneInstallerAsync")!);
+        Check(launches == 0, "stale installer click cannot launch setup after compatible installation is detected");
+
+        upgraded = false; Set(window, "_throneInstallation", legacy); Sync();
+        Set(window, "_runThroneInstaller", (Func<ProcessStartInfo, CancellationToken, Task>)((_, _) => throw new System.ComponentModel.Win32Exception(1223)));
+        Complete((Task)Call(window, "RunThroneInstallerAsync")!);
+        Check(Offered() && ((Button)window.FindName("ThroneRunInstaller")).IsEnabled
+            && ((TextBlock)window.FindName("ThroneNote")).Text == "Запуск отменён", "declining UAC leaves a retryable installer offer, not false installed state");
+        Set(window, "_runThroneInstaller", (Func<ProcessStartInfo, CancellationToken, Task>)((_, _) => throw new IOException("fixture launch failure")));
+        Complete((Task)Call(window, "RunThroneInstallerAsync")!);
+        Check(Offered() && ((Button)window.FindName("ThroneRunInstaller")).IsEnabled, "launch failure does not strand a disabled installer button");
+
+        var exited = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        ProcessStartInfo? captured = null;
+        Set(window, "_runThroneInstaller", (Func<ProcessStartInfo, CancellationToken, Task>)((start, _) => { captured = start; launches++; return exited.Task; }));
+        var installing = (Task)Call(window, "RunThroneInstallerAsync")!;
+        var watch = Stopwatch.StartNew(); while (captured == null && !installing.IsCompleted && watch.ElapsedMilliseconds < 3000) Pump(10);
+        Check(captured?.FileName == path && captured.UseShellExecute && captured.Verb == "runas"
+            && captured.WorkingDirectory == directory && captured.Arguments.Length == 0, "verified exact path, including spaces, launches through the shell with explicit administrator verb");
+        Check(!installing.IsCompleted && !((Button)window.FindName("ThroneRunInstaller")).IsEnabled, "launch remains pending until installer exits without blocking WPF");
+        Complete((Task)Call(window, "RunThroneInstallerAsync")!);
+        Check(launches == 1, "repeated click never starts a second concurrent installer");
+        int before = discoveries; exited.SetResult(); Complete(installing);
+        Check(discoveries == before + 1 && Offered(), "installer exit alone does not fabricate installation success");
+
+        upgraded = true; before = discoveries;
+        var stalePoll = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        Set(window, "_throneRefreshTask", stalePoll.Task);
+        installing = (Task)Call(window, "RunThroneInstallerAsync")!; Pump(100);
+        Check(!installing.IsCompleted && discoveries == before, "installer completion waits out an older poll before requesting fresh discovery");
+        stalePoll.SetResult(); Complete(installing);
+        Check(discoveries == before + 1 && !Offered(), "installer completion triggers authoritative discovery and hides the offer immediately after a successful install");
+        Check(File.ReadAllBytes(path).SequenceEqual(bytes), "successful install detection neither deletes nor rewrites the downloaded installer");
+
+        upgraded = false; Set(window, "_throneInstallation", legacy); Sync();
+        File.WriteAllText(path, "tampered"); before = launches;
+        Complete((Task)Call(window, "RunThroneInstallerAsync")!);
+        Check(launches == before && !Offered() && ((TextBlock)window.FindName("ThroneNote")).Text.Contains("изменился"), "tampered download never reaches the elevated launcher");
+
+        File.WriteAllBytes(path, bytes); Set(window, "_throneInstallerFile", installer); Sync();
+        Set(window, "_runThroneInstaller", (Func<ProcessStartInfo, CancellationToken, Task>)((_, cancel) => Task.Delay(Timeout.Infinite, cancel)));
+        installing = (Task)Call(window, "RunThroneInstallerAsync")!; Pump(100);
+        Check(!installing.IsCompleted, "close fixture has an actual pending installer lifetime wait");
+        window.Close(); Complete(installing);
+        Check(File.Exists(path) && !(bool)typeof(MainWindow).GetField("_throneInstalling", Private)!.GetValue(window)!, "closing the island cancels only its wait and leaves the installer file intact");
     }
 
     static int ThroneReadOnly(string output)

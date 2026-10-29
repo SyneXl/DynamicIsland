@@ -112,9 +112,10 @@ static partial class Program
             Check(Mode() == "Normal", "leaving a panel does not start fading immediately");
             Pump(700);
             Check(Mode() == "Quiet" && View() == "Idle", "idle clock enters passive appearance after its delay");
-            Near(root.Opacity, 1, "quiet mode never fades the entire root like cinema");
-            Near(body.Opacity, .58, "background has its own moderate transparency");
-            Near(content.Opacity, .9, "text/content retain much higher opacity than the background");
+            Near(root.Opacity, .4, "shared 40% opacity dims text, icons, artwork and the side bubble together");
+            Near(body.Opacity, .55, "background keeps an additional transparent layer");
+            Near(root.Opacity * body.Opacity, .22, "quiet background has 22% effective opacity instead of the previous 58%");
+            Near(content.Opacity, 1, "content is dimmed once by the shared root, not by a second overlapping fade");
             Check(!eqLoop.Running, "idle quiet clock does not run an equalizer animation loop");
             var weather = (WeatherService)typeof(MainWindow).GetField("_weather", Private)!.GetValue(window)!;
             Set(weather, "<Now>k__BackingField", new WeatherService.Report(10, 8, 3, Sky.Cloudy, false, []));
@@ -123,6 +124,7 @@ static partial class Program
             Check(((Digits)window.FindName("IdleDegrees")).Text == "+10°" && ((FrameworkElement)window.FindName("IdleView")).Width == 176,
                 "quiet mode retains clock/weather text and the ordinary compact width");
             Set(window, "_hovered", true); Sync(); Pump(210);
+            Near(root.Opacity, 1, "hover restores all compact foreground content within 180ms");
             Near(body.Opacity, 1, "hover restores black background within 180ms");
             Near(content.Opacity, 1, "hover restores full content opacity");
             Capture("revealed-clock-weather");
@@ -149,8 +151,13 @@ static partial class Program
             Capture("quiet-media-full-text");
             Call(window, "StartTimer", TimeSpan.FromMinutes(2)); Pump(300);
             Check(((FrameworkElement)window.FindName("Bubble")).Visibility == Visibility.Visible, "side timer bubble is retained next to passive media");
-            Near(((FrameworkElement)window.FindName("BubbleBody")).Opacity, .9, "side bubble content uses the same readable passive opacity");
+            Near(((FrameworkElement)window.FindName("BubbleBody")).Opacity, 1, "side bubble relies on the same shared fade, not a different content alpha");
+            Near(root.Opacity * ((FrameworkElement)window.FindName("BubbleBody")).Opacity, .4, "side bubble text is as dim as the main island text");
+            Call(window, "ShowLyric", "Музыка — полный текст", 8d, true, false);
+            Capture("quiet-media-with-bubble");
+            Call(window, "ShowLyric", text, 8d, true, false);
             Set(window, "_bubbleHovered", true); Sync(); Pump(210);
+            Near(root.Opacity, 1, "side bubble hover reveals the entire root together");
             Near(((FrameworkElement)window.FindName("BubbleBody")).Opacity, 1, "hovering a side bubble reveals both parts together");
             Set(window, "_bubbleHovered", false); Call(window, "StopTimer"); Sync(); Pump(1000);
             Set(window, "_hovered", true); Sync(); Pump(210);
@@ -215,6 +222,7 @@ static partial class Program
             Set(window, "_appearanceExiting", true); Call(window, "SyncCinemaAppearance");
             Check(Mode() == "Normal", "shutdown guard prevents delayed callbacks from restarting appearance animations");
             CompositeQuietPreviews(output);
+            QuietRenderedOpacityTests(output);
             QuietEqualizerStyles();
             Set(window, "_appearanceExiting", false); quietSetting.SetValue(null, true); Sync();
             Check((bool)typeof(MainWindow).GetField("_quietAppearanceScheduled", Private)!.GetValue(window)!, "close fixture has an actual pending appearance deadline");
@@ -226,7 +234,7 @@ static partial class Program
 
     static void CompositeQuietPreviews(string output)
     {
-        foreach (string name in new[] { "quiet-clock-weather", "revealed-clock-weather", "quiet-media-full-text", "revealed-media-full-text" })
+        foreach (string name in new[] { "quiet-clock-weather", "revealed-clock-weather", "quiet-media-full-text", "revealed-media-full-text", "quiet-media-with-bubble" })
         {
             var image = new BitmapImage(); image.BeginInit(); image.CacheOption = BitmapCacheOption.OnLoad;
             image.UriSource = new Uri(Path.GetFullPath(Path.Combine(output, name + ".png"))); image.EndInit(); image.Freeze();
@@ -243,6 +251,26 @@ static partial class Program
                 using var stream = File.Create(Path.Combine(output, name + "-" + background + ".png")); png.Save(stream);
             }
         }
+    }
+
+    static void QuietRenderedOpacityTests(string output)
+    {
+        int MaxAlpha(string name)
+        {
+            using var stream = File.OpenRead(Path.Combine(output, name + ".png"));
+            var frame = BitmapDecoder.Create(stream, BitmapCreateOptions.PreservePixelFormat, BitmapCacheOption.OnLoad).Frames[0];
+            var bitmap = new FormatConvertedBitmap(frame, PixelFormats.Bgra32, null, 0);
+            byte[] pixels = new byte[bitmap.PixelWidth * bitmap.PixelHeight * 4];
+            bitmap.CopyPixels(pixels, bitmap.PixelWidth * 4, 0);
+            return Enumerable.Range(0, pixels.Length / 4).Max(i => (int)pixels[i * 4 + 3]);
+        }
+        foreach (string name in new[] { "quiet-clock-weather", "quiet-media-full-text", "quiet-media-with-bubble" })
+        {
+            int alpha = MaxAlpha(name);
+            Check(alpha is >= 95 and <= 104, $"actual WPF pixels, including brightest text/icons, are capped at 40% alpha: {name} ({alpha}/255)");
+        }
+        foreach (string name in new[] { "revealed-clock-weather", "revealed-media-full-text" })
+            Check(MaxAlpha(name) >= 250, "hover render restores fully opaque pixels: " + name);
     }
 
     static void QuietEqualizerStyles()
