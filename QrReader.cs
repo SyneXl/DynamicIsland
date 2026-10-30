@@ -25,20 +25,23 @@ static class QrReader
         return reader.Decode(new RGBLuminanceSource(pixels, width, height, RGBLuminanceSource.BitmapFormat.BGR32))?.Text;
     }
 
-    static byte[] Capture(int left, int top, int width, int height)
+    internal static byte[] Capture(int left, int top, int width, int height)
     {
-        byte[] pixels = new byte[width * height * BytesPerPixel];
+        if (width <= 0 || height <= 0 || (long)width * height > 32_000_000) throw new ArgumentOutOfRangeException(nameof(width));
+        byte[] pixels = new byte[checked(width * height * BytesPerPixel)];
         IntPtr screen = GetDC(IntPtr.Zero), memory = CreateCompatibleDC(screen), bitmap = CreateCompatibleBitmap(screen, width, height);
         try
         {
+            if (screen == IntPtr.Zero || memory == IntPtr.Zero || bitmap == IntPtr.Zero) throw new System.ComponentModel.Win32Exception();
             IntPtr previous = SelectObject(memory, bitmap);
-            BitBlt(memory, 0, 0, width, height, screen, left, top, CopyWithLayeredWindows);
+            bool copied = BitBlt(memory, 0, 0, width, height, screen, left, top, CopyWithLayeredWindows);
             SelectObject(memory, previous);
+            if (!copied) throw new System.ComponentModel.Win32Exception();
             var info = new BITMAPINFOHEADER
             {
                 Size = Marshal.SizeOf<BITMAPINFOHEADER>(), Width = width, Height = -height, Planes = 1, BitCount = BytesPerPixel * 8,
             };
-            GetDIBits(screen, bitmap, 0, (uint)height, pixels, ref info, 0);
+            if (GetDIBits(screen, bitmap, 0, (uint)height, pixels, ref info, 0) != height) throw new System.ComponentModel.Win32Exception();
         }
         finally
         {

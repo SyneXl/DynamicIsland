@@ -17,6 +17,7 @@ sealed class MenuLayout
         new("mixer", "Микшер", Glyph.Bars, DefaultVisible: false),
         new("weather", "Погода", Glyph.CloudSun),
         new("qr", "QR-код с экрана", Glyph.Qr),
+        new("image-translation", "Перевод с экрана", Glyph.Lines),
         new("codex", "Codex", Glyph.Sparkle),
         new("settings", "Настройки", Glyph.Gear, true),
         new("appearance", "Оформление", Glyph.Look, true),
@@ -54,6 +55,7 @@ sealed class MenuLayout
                 if (definition.Id == "zapret" && obs >= 0) result.Insert(obs + 1, added);
                 else if (definition.Id == "throne" && zapret >= 0) result.Insert(zapret + 1, added);
                 else if (definition.Id == "mixer" && result.FindIndex(e => e.Id == "shelf") is int shelf && shelf >= 0) result.Insert(shelf + 1, added);
+                else if (definition.Id == "image-translation" && result.FindIndex(e => e.Id == "qr") is int qr && qr >= 0) result.Insert(qr + 1, added);
                 else result.Add(added);
             }
         Entries = result.AsReadOnly();

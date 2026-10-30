@@ -56,9 +56,9 @@ static partial class Program
     static void MenuLayoutTests()
     {
         MenuLayout layout = MenuLayout.Default();
-        string[] defaults = ["timer", "obs", "zapret", "throne", "shelf", "mixer", "weather", "qr", "codex", "settings", "appearance", "exit"];
+        string[] defaults = ["timer", "obs", "zapret", "throne", "shelf", "mixer", "weather", "qr", "image-translation", "codex", "settings", "appearance", "exit"];
         Check(layout.Entries.Select(e => e.Id).SequenceEqual(defaults), "menu preserves the existing default order");
-        Check(layout.IsDefault && layout.VisibleCount == 10, "first launch keeps all registered menu entries");
+        Check(layout.IsDefault && layout.VisibleCount == 11, "first launch keeps all registered menu entries");
         string[] legacy = ["timer", "obs", "shelf", "weather", "qr", "codex", "settings", "appearance", "exit"];
         string Legacy(string[] ids, int version = 1) => System.Text.Json.JsonSerializer.Serialize(new { Version = version, Entries = ids.Select(id => new MenuEntry(id, id != "obs")).ToArray() });
         var migrated = MenuLayout.Parse(Legacy(legacy.Append("zapret").ToArray()));
@@ -68,9 +68,9 @@ static partial class Program
             "older menu missing Zapret inserts it beside integrations rather than after Exit");
         Check(MenuLayout.Parse(migrated.Serialize()).Entries.SequenceEqual(migrated.Entries), "migration roundtrip is stable in menu format v2");
         var explicitTail = MenuLayout.Parse(Legacy(legacy.Append("zapret").ToArray(), 2));
-        Check(explicitTail.Entries.Where(e => e.Id is not ("throne" or "mixer")).Last().Id == "zapret", "new explicit tail placement remains the user's choice");
+        Check(explicitTail.Entries.Where(e => e.Id is not ("throne" or "mixer" or "image-translation")).Last().Id == "zapret", "new explicit tail placement remains the user's choice");
         var custom = new[] { "timer", "obs", "codex", "weather", "zapret", "qr", "shelf", "settings", "appearance", "exit" };
-        Check(MenuLayout.Parse(Legacy(custom)).Entries.Where(e => e.Id is not ("throne" or "mixer")).Select(e => e.Id).SequenceEqual(custom), "existing custom menu sort is not replaced by the new default");
+        Check(MenuLayout.Parse(Legacy(custom)).Entries.Where(e => e.Id is not ("throne" or "mixer" or "image-translation")).Select(e => e.Id).SequenceEqual(custom), "existing custom menu sort is not replaced by the new default");
         layout = layout.SetVisible("obs", false).Move("codex", int.MinValue).Move("exit", -2);
         Check(layout.Entries[0].Id == "codex" && !layout.Entries.Single(e => e.Id == "obs").Visible, "menu hides OBS and reorders independently");
         Check(layout.Entries[^3].Id == "exit", "essential entries can also be reordered");
@@ -163,7 +163,7 @@ static partial class Program
             Call(window, "SyncMenuLayout");
             Page("Menu");
             var originalButtons = rows.Children.OfType<Button>().ToDictionary(b => (string)b.Tag);
-            Check(VisibleIds().Length == 10 && Math.Abs(menuView.Height - 448) < 0.01, "default WPF menu sizes to the registered entries");
+            Check(VisibleIds().Length == 11 && Math.Abs(menuView.Height - 448) < 0.01, "default WPF menu sizes to the registered entries");
             Check(window.FindName("MenuLayoutRow") is Button, "menu editor has a direct Appearance entry");
             Page("Look");
             Click((Button)window.FindName("MenuLayoutRow"));
@@ -197,10 +197,10 @@ static partial class Program
             Check(!((TextBlock)window.FindName("MenuLayoutStatus")).Text.Contains("Не удалось"), "successful save gives a quiet consistent status");
             Check(editorRows.Children.Count == MenuLayout.Catalog.Count, "hidden OBS remains in the editor for re-enabling");
             Call(window, "MoveMenuItem", "codex", -1);
-            Check(VisibleIds()[4] == "codex", "keyboard reorder still changes the actual menu");
+            Check(VisibleIds()[5] == "codex", "keyboard reorder still changes the actual menu");
             Check(rows.Children.OfType<Button>().All(b => ReferenceEquals(b, originalButtons[(string)b.Tag])),
                 "reorder preserves original buttons, live counters and event routes");
-            foreach (string id in new[] { "timer", "shelf", "weather", "qr", "codex", "zapret" }) Click(EditorButton(id));
+            foreach (string id in new[] { "timer", "shelf", "weather", "qr", "image-translation", "codex", "zapret" }) Click(EditorButton(id));
             Check(VisibleIds().SequenceEqual(new[] { "settings", "appearance", "exit" }) && menuView.Height == 168,
                 "hiding every optional entry leaves a compact menu with all recovery routes");
             Check(((TextBlock)window.FindName("MenuLayoutSummary")).Text == $"3 из {MenuLayout.Catalog.Count}", "Appearance summary reflects current visible count");
@@ -265,7 +265,7 @@ static partial class Program
             Check(VisibleIds()[0] == "exit" && ((Grid)editorRows.Children[0]).Tag.Equals("exit"), "failed drop persistence restores both menu and editor order");
             saveField.SetValue(window, save);
             Click((Button)window.FindName("MenuLayoutReset"));
-            Check(VisibleIds().Length == 10 && menuView.Height == 448 && MenuLayout.Parse(saved).IsDefault,
+            Check(VisibleIds().Length == 11 && menuView.Height == 448 && MenuLayout.Parse(saved).IsDefault,
                 "reset restores default visibility/order and persists it");
             Check(window.FindName("MenuLayoutReset") is Button { IsEnabled: false, Opacity: <= 0.5 }, "redundant reset is disabled at defaults");
             Check(status.Visibility == Visibility.Collapsed && status.Text.Length == 0 && editorView.Height == 408,

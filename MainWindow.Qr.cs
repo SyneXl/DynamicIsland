@@ -24,7 +24,7 @@ public partial class MainWindow
 
     async void ReadQr(bool pickArea)
     {
-        if (_readingQr) return;
+        if (_readingQr || _pickingArea || _imageTranslationBusy) return;
 
         _readingQr = true;
         ShowPanel(Panel.None);
@@ -51,11 +51,11 @@ public partial class MainWindow
         if (looked) ShowQr(found, pickArea);
     }
 
-    async Task<Int32Rect?> PickAreaAsync()
+    async Task<Int32Rect?> PickAreaAsync(string title = "Обведите QR-код", string detail = "Esc или правая кнопка — отмена", Glyph glyph = Glyph.Qr)
     {
         var picker = new AreaPicker(QrReader.Desktop);
         _pickingArea = true;
-        Notify(Glyph.Qr, Brushes.White, "Обведите QR-код", "Esc или правая кнопка — отмена", PickerHintSeconds, true);
+        Notify(glyph, Brushes.White, title, detail, PickerHintSeconds, true);
         try
         {
             picker.ShowDialog();

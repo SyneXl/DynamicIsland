@@ -35,6 +35,8 @@ static partial class Program
         if (args is ["--tooltip-preview", var tooltipPreview]) return ToolTipPreview(tooltipPreview);
         if (args is ["--updater-tests"]) return UpdaterTests().GetAwaiter().GetResult();
         if (args is ["--release-notes-tests", var notesOutput]) return ReleaseNotesTests(notesOutput);
+        if (args is ["--image-translation-tests", var imageOutput]) return ImageTranslationTests(imageOutput, false);
+        if (args is ["--image-translation-live", var imageLiveOutput]) return ImageTranslationTests(imageLiveOutput, true);
         if (args is ["--release-notes-readonly", var notesReadOutput]) return ReleaseNotesReadOnly(notesReadOutput).GetAwaiter().GetResult();
         if (args is ["--island-features-tests", var featureOutput]) return IslandFeaturesTests(featureOutput);
         if (args is ["--quiet-appearance-tests", var quietOutput]) return QuietAppearanceTests(quietOutput);

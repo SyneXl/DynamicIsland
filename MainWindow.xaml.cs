@@ -13,9 +13,9 @@ namespace DynamicIsland;
 
 public partial class MainWindow : Window
 {
-    enum View { Idle, Media, CinemaMedia, Timer, Record, Volume, Charge, Headset, Focus, Toast, Notice, MediaBig, IdleBig, TimerBig, TimerSet, RecordBig, RecordSet, Menu, Settings, Look, Shelf, Weather, Place, Qr, Update, Lyrics, Loading, Codex, MenuLayout, Zapret, ZapretFolders, ZapretStrategies, Throne, ThroneGroups, ThroneServers, Mixer, ShelfNote, ReleaseNotes }
+    enum View { Idle, Media, CinemaMedia, Timer, Record, Volume, Charge, Headset, Focus, Toast, Notice, MediaBig, IdleBig, TimerBig, TimerSet, RecordBig, RecordSet, Menu, Settings, Look, Shelf, Weather, Place, Qr, Update, Lyrics, Loading, Codex, MenuLayout, Zapret, ZapretFolders, ZapretStrategies, Throne, ThroneGroups, ThroneServers, Mixer, ShelfNote, ReleaseNotes, ImageTranslation }
 
-    enum Panel { None, Player, Timer, TimerSet, Record, Menu, Settings, Look, Shelf, Weather, Place, Qr, Update, Lyrics, Codex, MenuLayout, Zapret, ZapretFolders, ZapretStrategies, Throne, ThroneGroups, ThroneServers, Mixer, ShelfNote, ReleaseNotes }
+    enum Panel { None, Player, Timer, TimerSet, Record, Menu, Settings, Look, Shelf, Weather, Place, Qr, Update, Lyrics, Codex, MenuLayout, Zapret, ZapretFolders, ZapretStrategies, Throne, ThroneGroups, ThroneServers, Mixer, ShelfNote, ReleaseNotes, ImageTranslation }
 
     readonly record struct PillShape(double Width, double Height, double Radius);
 
@@ -55,6 +55,7 @@ public partial class MainWindow : Window
         [View.Weather] = new(340, 190, 34),
         [View.Place] = new(320, 200, 34),
         [View.Qr] = new(320, 104, 34),
+        [View.ImageTranslation] = new(340, 128, 34),
         [View.Update] = new(320, 150, 34),
         [View.ReleaseNotes] = new(360, 250, 34),
         [View.Lyrics] = new(352, 272, 34),
@@ -76,7 +77,7 @@ public partial class MainWindow : Window
         [View.MediaBig] = new(20, 20, 64, 22, 52, 38, 26, 1),
     };
 
-    static readonly View[] MenuPages = [View.Settings, View.Look, View.TimerSet, View.TimerBig, View.RecordSet, View.RecordBig, View.Shelf, View.Weather, View.Qr, View.Codex, View.Zapret, View.Throne, View.Mixer];
+    static readonly View[] MenuPages = [View.Settings, View.Look, View.TimerSet, View.TimerBig, View.RecordSet, View.RecordBig, View.Shelf, View.Weather, View.Qr, View.Codex, View.Zapret, View.Throne, View.Mixer, View.ImageTranslation];
 
     static readonly View[] SettingsPages = [View.Update, View.Lyrics];
 
@@ -164,6 +165,7 @@ public partial class MainWindow : Window
             [View.Weather] = WeatherView,
             [View.Place] = PlaceView,
             [View.Qr] = QrView,
+            [View.ImageTranslation] = ImageTranslationView,
             [View.Codex] = CodexView,
             [View.Update] = UpdatePage,
             [View.ReleaseNotes] = ReleaseNotesPage,
@@ -224,6 +226,7 @@ public partial class MainWindow : Window
 
         PrepareViews();
         PrepareMenuLayout();
+        PrepareImageTranslation();
         PrepareZapret();
         PrepareThrone();
         PrepareWeatherHours();
@@ -455,6 +458,7 @@ public partial class MainWindow : Window
             Panel.Weather => View.Weather,
             Panel.Place => View.Place,
             Panel.Qr => View.Qr,
+            Panel.ImageTranslation => View.ImageTranslation,
             Panel.TimerSet => View.TimerSet,
             Panel.Record => _obs.Recording ? View.RecordBig : View.RecordSet,
             Panel.Timer when _countdown.IsActive => View.TimerBig,
@@ -554,6 +558,7 @@ public partial class MainWindow : Window
         View.RecordSet => PillShapes[view] with { Width = RecordSetView.Width },
         View.Update => PillShapes[view] with { Height = UpdatePage.Height },
         View.ReleaseNotes => PillShapes[view] with { Height = ReleaseNotesPage.Height },
+        View.ImageTranslation => PillShapes[view] with { Height = ImageTranslationView.Height },
         View.Weather => PillShapes[view] with { Height = WeatherView.Height },
         View.Place => PillShapes[view] with { Height = PlaceView.Height },
         View.IdleBig => PillShapes[view] with { Height = IdleBigView.Height },
@@ -603,6 +608,7 @@ public partial class MainWindow : Window
 
     void SelectPanel(Panel panel)
     {
+        if (_imageTranslationBusy && panel is not (Panel.ImageTranslation or Panel.None)) CancelImageTranslation();
         if (_panel == Panel.ShelfNote && panel != Panel.ShelfNote && !CommitShelfNote()) return;
         CancelNetworkStartPrompt(panel);
         if (panel == Panel.Update) _updateAnnouncement.Consume();
@@ -622,7 +628,7 @@ public partial class MainWindow : Window
 
     void Collapse()
     {
-        if (_ringing || _hovered || _pickingFiles || IsTyping || _menuDragId != null || _zapretBusy || _throneBusy || _throneDownloading
+        if (_ringing || _hovered || _pickingFiles || IsTyping || _menuDragId != null || _zapretBusy || _throneBusy || _throneDownloading || _imageTranslationBusy
             || _view == View.MenuLayout && IsActive && MenuLayoutView.IsKeyboardFocusWithin) return;
         ShowPanel(Panel.None);
     }

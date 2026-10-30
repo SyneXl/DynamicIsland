@@ -59,6 +59,8 @@ jobs:
         run: dotnet run --project Tests/DynamicIsland.Tests.csproj -c Release --no-build -- --updater-tests
       - name: Release notes and offline history controls
         run: dotnet run --project Tests/DynamicIsland.Tests.csproj -c Release --no-build -- --release-notes-tests artifacts/release-notes
+      - name: Image translation and overlay controls
+        run: dotnet run --project Tests/DynamicIsland.Tests.csproj -c Release --no-build -- --image-translation-tests artifacts/image-translation
       - name: Update bubble, mixer and shelf controls
         run: dotnet run --project Tests/DynamicIsland.Tests.csproj -c Release --no-build -- --island-features-tests artifacts/island-features
       - name: Quiet appearance and interaction transitions

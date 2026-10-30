@@ -1153,6 +1153,13 @@
                                 <local:Icon Style="{StaticResource RowChevron}"/>
                             </Grid>
                         </Button>
+                        <Button Style="{StaticResource RowButton}" Tag="image-translation" Click="ImageTranslationRow_Click">
+                            <Grid>
+                                <local:Icon Style="{StaticResource RowIcon}" Kind="Lines"/>
+                                <TextBlock Style="{StaticResource RowLabel}" Text="Перевод с экрана"/>
+                                <local:Icon Style="{StaticResource RowChevron}"/>
+                            </Grid>
+                        </Button>
                         <Button Style="{StaticResource RowButton}" Tag="codex" Click="CodexRow_Click">
                             <Grid>
                                 <local:Icon Style="{StaticResource RowIcon}" Kind="Sparkle"/>
@@ -2057,6 +2064,15 @@
                     </StackPanel>
                 </Grid>
 
+                <Grid x:Name="ImageTranslationView" Width="340" Height="128" HorizontalAlignment="Center" VerticalAlignment="Top">
+                    <StackPanel x:Name="ImageTranslationContent" Margin="12,8,12,14">
+                        <Button Style="{StaticResource BackButton}" Content="ПЕРЕВОД С ЭКРАНА" Click="ImageTranslationBack_Click"/>
+                        <TextBlock x:Name="ImageTranslationStatus" Text="Выдели область с текстом" Margin="12,12,12,14"
+                                   FontSize="14" TextWrapping="Wrap"/>
+                        <Button x:Name="ImageTranslationAction" Style="{StaticResource ChipButton}" Content="Выделить область"
+                                Height="34" Margin="2,0,2,0" Click="ImageTranslationAction_Click"/>
+                    </StackPanel>
+                </Grid>
                 <Grid x:Name="QrView" Width="320" Height="104" HorizontalAlignment="Center" VerticalAlignment="Top">
                     <StackPanel Margin="10,8,10,0" VerticalAlignment="Top">
                         <local:RowList>
