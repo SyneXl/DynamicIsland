@@ -63,8 +63,16 @@ static partial class Program
             Page("Settings");
             var settings = (FrameworkElement)window.FindName("SettingsView");
             var updateLabel = (TextBlock)window.FindName("UpdateText");
-            Check(settings.Height == 414 && updateLabel.TransformToAncestor(settings).Transform(new Point(0, updateLabel.ActualHeight)).Y <= settings.ActualHeight,
-                "settings fit cinema and the own-fork update route without clipping");
+            bool FitsSettings(FrameworkElement element)
+            {
+                Rect actual = element.TransformToAncestor(settings).TransformBounds(new Rect(0, 0, element.ActualWidth, element.ActualHeight));
+                return new Rect(-.5, -.5, settings.ActualWidth + 1, settings.ActualHeight + 1).Contains(actual);
+            }
+            var settingsRows = ((Grid)settings).Children.OfType<RowList>().Single().Children.OfType<Button>().ToArray();
+            Check(settings.ActualHeight > 0 && settingsRows.Length > 0 && settingsRows.All(FitsSettings) && FitsSettings(updateLabel)
+                && FitsSettings((FrameworkElement)window.FindName("CinemaSwitch"))
+                && FitsSettings((FrameworkElement)window.FindName("BindingsRow")),
+                "settings retain cinema, lyrics, bindings and the update route without clipping");
             Save(root, Path.Combine(output, "settings.png"));
             var updater = (Updater)typeof(MainWindow).GetField("_updater", Private)!.GetValue(window)!;
             using (var release = System.Text.Json.JsonDocument.Parse(ReleaseJson(UpdateBytes(), tag: "v9.0.0")))
