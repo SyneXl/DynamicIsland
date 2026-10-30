@@ -1483,7 +1483,7 @@
                     </Grid>
                 </Grid>
 
-                <Grid x:Name="SettingsView" Width="320" Height="414" HorizontalAlignment="Center" VerticalAlignment="Top">
+                <Grid x:Name="SettingsView" Width="320" Height="454" HorizontalAlignment="Center" VerticalAlignment="Top">
                     <local:RowList Margin="10,8,10,0">
                         <Button Style="{StaticResource BackButton}" Content="НАСТРОЙКИ" Click="SettingsBack_Click"/>
                         <Button Style="{StaticResource RowButton}" Click="LyricsRow_Click">
@@ -1546,6 +1546,13 @@
                                 <local:Toggle x:Name="CinemaSwitch" Style="{StaticResource RowSwitch}"/>
                             </Grid>
                         </Button>
+                        <Button x:Name="BindingsRow" Style="{StaticResource RowButton}" Click="BindingsRow_Click">
+                            <Grid>
+                                <local:Icon Style="{StaticResource RowIcon}" Kind="Pointer"/>
+                                <TextBlock Style="{StaticResource RowLabel}" Text="Горячие клавиши"/>
+                                <local:Icon Style="{StaticResource RowChevron}"/>
+                            </Grid>
+                        </Button>
                         <Button Style="{StaticResource RowButton}" Click="UpdateRow_Click">
                             <Grid>
                                 <local:Icon Style="{StaticResource RowIcon}" Kind="Update"/>
@@ -1557,6 +1564,33 @@
                             </Grid>
                         </Button>
                     </local:RowList>
+                </Grid>
+
+                <Grid x:Name="BindingsView" Width="440" Height="460" HorizontalAlignment="Center" VerticalAlignment="Top">
+                    <Grid Margin="10,8,10,16">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="30"/>
+                            <RowDefinition Height="*"/>
+                            <RowDefinition Height="Auto"/>
+                        </Grid.RowDefinitions>
+                        <Button Style="{StaticResource BackButton}" Content="ГОРЯЧИЕ КЛАВИШИ" Click="BindingsBack_Click" HorizontalAlignment="Left"/>
+                        <Button Style="{StaticResource ChipButton}" Content="Сбросить" Width="82" HorizontalAlignment="Right" Click="BindingsReset_Click"/>
+                        <ScrollViewer x:Name="BindingScroll" Grid.Row="1" Style="{StaticResource MenuScrollViewer}" VerticalScrollBarVisibility="Auto"
+                                      HorizontalScrollBarVisibility="Disabled" PreviewMouseWheel="MenuScroll_PreviewMouseWheel" Margin="0,4,0,8">
+                            <StackPanel x:Name="BindingRows"/>
+                        </ScrollViewer>
+                        <StackPanel Grid.Row="2">
+                            <Border x:Name="BindingCapture" Background="Transparent" Focusable="True" MinHeight="36" Padding="12,6">
+                                <TextBlock x:Name="BindingPrompt" Text="Работают при наведении на остров" Foreground="{StaticResource Dim}" FontSize="12" TextWrapping="Wrap"/>
+                            </Border>
+                            <StackPanel x:Name="BindingCaptureActions" Orientation="Horizontal" HorizontalAlignment="Center" Visibility="Collapsed">
+                                <Button x:Name="BindingDefaults" Style="{StaticResource ChipButton}" Content="По умолчанию" Width="119" Click="BindingDefaults_Click"/>
+                                <Button x:Name="BindingClear" Style="{StaticResource ChipButton}" Content="Убрать" Width="80" Click="BindingClear_Click"/>
+                                <Button x:Name="BindingReplace" Style="{StaticResource ChipButton}" Content="Заменить" Width="110" Click="BindingReplace_Click" Visibility="Collapsed"/>
+                                <Button Style="{StaticResource ChipButton}" Content="Отмена" Width="80" Click="BindingCancel_Click"/>
+                            </StackPanel>
+                        </StackPanel>
+                    </Grid>
                 </Grid>
 
                 <Grid x:Name="LyricsPage" Width="352" Height="272" HorizontalAlignment="Center" VerticalAlignment="Top">
@@ -2067,8 +2101,12 @@
                 <Grid x:Name="ImageTranslationView" Width="340" Height="128" HorizontalAlignment="Center" VerticalAlignment="Top">
                     <StackPanel x:Name="ImageTranslationContent" Margin="12,8,12,14">
                         <Button Style="{StaticResource BackButton}" Content="ПЕРЕВОД С ЭКРАНА" Click="ImageTranslationBack_Click"/>
-                        <TextBlock x:Name="ImageTranslationStatus" Text="Выдели область с текстом" Margin="12,12,12,14"
-                                   FontSize="14" TextWrapping="Wrap"/>
+                        <UniformGrid x:Name="ImageTranslationProviders" Rows="1" Height="34" Margin="2,8,2,8">
+                            <Button x:Name="ImageTranslationYandex" Style="{StaticResource ChipButton}" Content="Яндекс" Tag="Yandex" Height="34" Click="ImageTranslationProvider_Click"/>
+                            <Button x:Name="ImageTranslationGoogle" Style="{StaticResource ChipButton}" Content="Google" Tag="Google" Height="34" Click="ImageTranslationProvider_Click"/>
+                        </UniformGrid>
+                        <TextBlock x:Name="ImageTranslationStatus" Text="" Margin="12,4,12,12"
+                                   FontSize="14" TextWrapping="Wrap" Visibility="Collapsed"/>
                         <Button x:Name="ImageTranslationAction" Style="{StaticResource ChipButton}" Content="Выделить область"
                                 Height="34" Margin="2,0,2,0" Click="ImageTranslationAction_Click"/>
                     </StackPanel>

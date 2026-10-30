@@ -21,10 +21,20 @@ jobs:
         run: dotnet run --project Tests/DynamicIsland.Tests.csproj -c Release
       - name: Update verification and failure controls
         run: dotnet run --project Tests/DynamicIsland.Tests.csproj -c Release --no-build -- --updater-tests
+      - name: Hover-only bindings, persistence, recording and native hotkey lifecycle
+        run: dotnet run --project Tests/DynamicIsland.Tests.csproj -c Release --no-build -- --bindings-tests artifacts/bindings
+      - name: Menu resize retention and restored auto-collapse (isolated WPF fixture)
+        run: dotnet run --project Tests/DynamicIsland.Tests.csproj -c Release --no-build -- --menu-retention-tests artifacts/menu-retention
       - name: Multi-version release notes, offline journal and dedicated page
         run: dotnet run --project Tests/DynamicIsland.Tests.csproj -c Release --no-build -- --release-notes-tests artifacts/release-notes
       - name: Image translation protocol, cancellation and native overlay controls
         run: dotnet run --project Tests/DynamicIsland.Tests.csproj -c Release --no-build -- --image-translation-tests artifacts/image-translation
+      - name: Google Lens protocol, provider selection and failure controls (offline fixtures)
+        run: dotnet run --project Tests/DynamicIsland.Tests.csproj -c Release --no-build -- --google-image-translation-tests artifacts/google-image-translation
+      - name: Translation color sampling, selection, pending region and overlap lifecycle
+        run: dotnet run --project Tests/DynamicIsland.Tests.csproj -c Release --no-build -- --translation-polish-tests artifacts/translation-polish
+      - name: Full translation layout, navigation typography and no-ellipsis controls
+        run: dotnet run --project Tests/DynamicIsland.Tests.csproj -c Release --no-build -- --translation-layout-tests artifacts/translation-layout
       - name: Update bubble, mixer and shelf controls
         run: dotnet run --project Tests/DynamicIsland.Tests.csproj -c Release --no-build -- --island-features-tests artifacts/island-features
       - name: Quiet appearance and interaction transitions

@@ -13,9 +13,9 @@ namespace DynamicIsland;
 
 public partial class MainWindow : Window
 {
-    enum View { Idle, Media, CinemaMedia, Timer, Record, Volume, Charge, Headset, Focus, Toast, Notice, MediaBig, IdleBig, TimerBig, TimerSet, RecordBig, RecordSet, Menu, Settings, Look, Shelf, Weather, Place, Qr, Update, Lyrics, Loading, Codex, MenuLayout, Zapret, ZapretFolders, ZapretStrategies, Throne, ThroneGroups, ThroneServers, Mixer, ShelfNote, ReleaseNotes, ImageTranslation }
+    enum View { Idle, Media, CinemaMedia, Timer, Record, Volume, Charge, Headset, Focus, Toast, Notice, MediaBig, IdleBig, TimerBig, TimerSet, RecordBig, RecordSet, Menu, Settings, Look, Shelf, Weather, Place, Qr, Update, Lyrics, Loading, Codex, MenuLayout, Zapret, ZapretFolders, ZapretStrategies, Throne, ThroneGroups, ThroneServers, Mixer, ShelfNote, ReleaseNotes, ImageTranslation, Bindings }
 
-    enum Panel { None, Player, Timer, TimerSet, Record, Menu, Settings, Look, Shelf, Weather, Place, Qr, Update, Lyrics, Codex, MenuLayout, Zapret, ZapretFolders, ZapretStrategies, Throne, ThroneGroups, ThroneServers, Mixer, ShelfNote, ReleaseNotes, ImageTranslation }
+    enum Panel { None, Player, Timer, TimerSet, Record, Menu, Settings, Look, Shelf, Weather, Place, Qr, Update, Lyrics, Codex, MenuLayout, Zapret, ZapretFolders, ZapretStrategies, Throne, ThroneGroups, ThroneServers, Mixer, ShelfNote, ReleaseNotes, ImageTranslation, Bindings }
 
     readonly record struct PillShape(double Width, double Height, double Radius);
 
@@ -40,7 +40,8 @@ public partial class MainWindow : Window
         [View.RecordSet] = new(320, 92, 40),
         [View.Menu] = new(300, 408, 34),
         [View.Codex] = new(320, 304, 34),
-        [View.Settings] = new(320, 414, 34),
+        [View.Settings] = new(320, 454, 34),
+        [View.Bindings] = new(440, 460, 34),
         [View.Look] = new(352, LookHeight, 34),
         [View.MenuLayout] = new(380, 408, 34),
         [View.Throne] = new(360, 326, 34),
@@ -79,7 +80,7 @@ public partial class MainWindow : Window
 
     static readonly View[] MenuPages = [View.Settings, View.Look, View.TimerSet, View.TimerBig, View.RecordSet, View.RecordBig, View.Shelf, View.Weather, View.Qr, View.Codex, View.Zapret, View.Throne, View.Mixer, View.ImageTranslation];
 
-    static readonly View[] SettingsPages = [View.Update, View.Lyrics];
+    static readonly View[] SettingsPages = [View.Update, View.Lyrics, View.Bindings];
 
     static readonly View[] WeatherPages = [View.Place];
 
@@ -151,6 +152,7 @@ public partial class MainWindow : Window
             [View.RecordSet] = RecordSetView,
             [View.Menu] = MenuView,
             [View.Settings] = SettingsView,
+            [View.Bindings] = BindingsView,
             [View.Look] = LookView,
             [View.MenuLayout] = MenuLayoutView,
             [View.Throne] = ThroneView,
@@ -226,6 +228,8 @@ public partial class MainWindow : Window
 
         PrepareViews();
         PrepareMenuLayout();
+        PrepareBindings();
+        PrepareMenuRetention();
         PrepareImageTranslation();
         PrepareZapret();
         PrepareThrone();
@@ -279,11 +283,13 @@ public partial class MainWindow : Window
         _hwnd = new WindowInteropHelper(this).Handle;
         Native.HideFromTaskSwitcher(_hwnd);
         if (Native.RegisterShellHook(_hwnd)) HwndSource.FromHwnd(_hwnd).AddHook(OnShellMessage);
+        InitializeHoverHotkeys();
     }
 
     protected override void OnDpiChanged(DpiScale oldDpi, DpiScale newDpi)
     {
         base.OnDpiChanged(oldDpi, newDpi);
+        ResetMenuRetention();
         ApplyShape();
     }
 
@@ -353,6 +359,7 @@ public partial class MainWindow : Window
 
     void CenterOnScreen()
     {
+        ResetMenuRetention();
         Left = (SystemParameters.PrimaryScreenWidth - Width) / 2;
         Top = 0;
         _glass.Place();
@@ -370,6 +377,7 @@ public partial class MainWindow : Window
     void Exit()
     {
         if (_appearanceExiting) return;
+        ResetMenuRetention();
         _appearanceExiting = true;
         _quietAppearanceTimeout.Cancel();
         _ticker.Stop();
@@ -440,6 +448,7 @@ public partial class MainWindow : Window
         {
             Panel.Menu => View.Menu,
             Panel.Settings => View.Settings,
+            Panel.Bindings => View.Bindings,
             Panel.Look => View.Look,
             Panel.MenuLayout => View.MenuLayout,
             Panel.Throne => View.Throne,
@@ -471,6 +480,7 @@ public partial class MainWindow : Window
 
     void UpdateView()
     {
+        SyncHoverHotkeys();
         SyncCinemaAppearance();
         View target = TargetView();
         bool changed = target != _view;
@@ -608,13 +618,16 @@ public partial class MainWindow : Window
 
     void SelectPanel(Panel panel)
     {
+        if (panel != Panel.Bindings && _recordingBinding != null) EndBindingCapture();
         if (_imageTranslationBusy && panel is not (Panel.ImageTranslation or Panel.None)) CancelImageTranslation();
         if (_panel == Panel.ShelfNote && panel != Panel.ShelfNote && !CommitShelfNote()) return;
         CancelNetworkStartPrompt(panel);
         if (panel == Panel.Update) _updateAnnouncement.Consume();
         if (panel != Panel.MenuLayout) EndMenuReorder(false);
         if (panel != Panel.Player) CancelScrub();
+        if (panel == Panel.None) ResetMenuRetention();
         _panel = panel;
+        SyncHoverHotkeys();
         _transientView = null;
         _transientTimeout.Cancel();
         SilenceAlarm();
@@ -628,7 +641,8 @@ public partial class MainWindow : Window
 
     void Collapse()
     {
-        if (_ringing || _hovered || _pickingFiles || IsTyping || _menuDragId != null || _zapretBusy || _throneBusy || _throneDownloading || _imageTranslationBusy
+        if (RetainMenuForPointer()) return;
+        if (_ringing || _hovered || _pickingFiles || IsTyping || _recordingBinding != null || _menuDragId != null || _zapretBusy || _throneBusy || _throneDownloading || _imageTranslationBusy
             || _view == View.MenuLayout && IsActive && MenuLayoutView.IsKeyboardFocusWithin) return;
         ShowPanel(Panel.None);
     }

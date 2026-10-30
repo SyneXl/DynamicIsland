@@ -5,6 +5,7 @@ using System.Windows.Input;
 using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
+using System.Windows.Media.Animation;
 
 namespace DynamicIsland;
 
@@ -12,36 +13,32 @@ namespace DynamicIsland;
 // copying an image; positioning uses physical pixels, including negative monitors.
 sealed class ImageTranslationWindow : Window
 {
-    readonly BitmapSource _original, _translated;
-    readonly ImageTranslationResult _result;
+    readonly BitmapSource _original;
+    BitmapSource _translated;
+    ImageTranslationResult _result;
     readonly Image _image;
+    readonly SelectionFrame _frame;
     readonly Window _toolbar;
     readonly Button _originalButton, _translatedButton, _copyButton;
     readonly Int32Rect _area;
     bool _showOriginal;
+    public bool IsProcessing { get; private set; }
 
     public ImageTranslationWindow(MainWindow owner, Int32Rect area, BitmapSource original, BitmapSource translated,
-        ImageTranslationResult result, Action selectAgain)
+        ImageTranslationResult result, Action selectAgain, bool processing = false)
     {
         Owner = owner; _area = area; _original = original; _translated = translated; _result = result;
+        IsProcessing = processing;
         WindowStyle = WindowStyle.None; ResizeMode = ResizeMode.NoResize; ShowInTaskbar = false; Topmost = true;
         AllowsTransparency = true; Background = Brushes.Transparent; Title = "Перевод области";
-        _image = new Image { Source = translated, Stretch = Stretch.Fill };
+        _image = new Image { Name = "TranslationImage", Source = processing ? original : translated, Stretch = Stretch.Fill };
         var surface = new Grid { ClipToBounds = true };
+        surface.Children.Add(new Image { Source = original, Stretch = Stretch.Fill, IsHitTestVisible = false });
         surface.Children.Add(_image);
         // Two fine contrasting edges keep the region legible on both light and
         // dark backgrounds. They overlay the preview, never the source bitmap.
-        surface.Children.Add(new Border
-        {
-            BorderBrush = new SolidColorBrush(Color.FromArgb(130, 0, 0, 0)), BorderThickness = new Thickness(2),
-            CornerRadius = new CornerRadius(6), Margin = new Thickness(.5), IsHitTestVisible = false,
-        });
-        surface.Children.Add(new Border
-        {
-            Name = "TranslationRegionFrame", BorderBrush = new SolidColorBrush(Color.FromArgb(190, 255, 255, 255)),
-            BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(5),
-            Margin = new Thickness(1.5), IsHitTestVisible = false,
-        });
+        _frame = new SelectionFrame { Name = "TranslationRegionFrame", IsProcessing = processing };
+        surface.Children.Add(_frame);
         Content = surface;
         var bar = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(6) };
         Button MakeButton(string text, RoutedEventHandler click)
@@ -69,11 +66,29 @@ sealed class ImageTranslationWindow : Window
             Content = new Border { Background = new SolidColorBrush(Color.FromRgb(12, 12, 12)), CornerRadius = new CornerRadius(21), Child = bar },
         };
         SourceInitialized += (_, _) => SetWindowPos(new WindowInteropHelper(this).Handle, new IntPtr(-1), area.X, area.Y, area.Width, area.Height, 0x0040);
-        ContentRendered += (_, _) => { _toolbar.Owner = this; _toolbar.Show(); PositionToolbar(); Activate(); Focus(); };
+        ContentRendered += (_, _) => { if (!IsProcessing) ShowToolbar(); Activate(); Focus(); };
         Closed += (_, _) => { if (_toolbar.IsVisible) _toolbar.Close(); };
         PreviewKeyDown += KeyPressed; _toolbar.PreviewKeyDown += KeyPressed;
         MouseRightButtonUp += (_, _) => Close();
         ShowOriginal(false);
+    }
+
+    void ShowToolbar()
+    {
+        if (_toolbar.IsVisible) return;
+        _toolbar.Owner = this; _toolbar.Show(); PositionToolbar();
+        if (SystemParameters.ClientAreaAnimation)
+            _toolbar.BeginAnimation(OpacityProperty, new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(140)));
+    }
+    internal void Complete(BitmapSource translated, ImageTranslationResult result)
+    {
+        _translated = translated; _result = result;
+        IsProcessing = false; _frame.IsProcessing = false;
+        ShowOriginal(false);
+        if (SystemParameters.ClientAreaAnimation)
+            _image.BeginAnimation(OpacityProperty, new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(170))
+                { EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } });
+        if (IsVisible) ShowToolbar();
     }
 
     void PositionToolbar()
@@ -91,6 +106,7 @@ sealed class ImageTranslationWindow : Window
     }
     internal void ShowOriginal(bool original)
     {
+        _image.BeginAnimation(OpacityProperty, null);
         _showOriginal = original; _image.Source = original ? _original : _translated;
         _originalButton.Foreground = original ? Brushes.White : Brushes.Gray;
         _translatedButton.Foreground = original ? Brushes.Gray : Brushes.White;
@@ -108,7 +124,7 @@ sealed class ImageTranslationWindow : Window
     void KeyPressed(object sender, KeyEventArgs e)
     {
         if (e.Key == Key.Escape) { e.Handled = true; Close(); }
-        else if (e.Key == Key.C && Keyboard.Modifiers.HasFlag(ModifierKeys.Control))
+        else if (!IsProcessing && e.Key == Key.C && Keyboard.Modifiers.HasFlag(ModifierKeys.Control))
         { e.Handled = true; if (Keyboard.Modifiers.HasFlag(ModifierKeys.Shift)) CopyText(); else CopyImage(); }
     }
     [StructLayout(LayoutKind.Sequential)] struct NativeRect { public int Left, Top, Right, Bottom; }

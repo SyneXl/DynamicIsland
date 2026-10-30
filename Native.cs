@@ -1,6 +1,7 @@
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Windows;
+using System.Windows.Input;
 
 namespace DynamicIsland;
 
@@ -115,6 +116,13 @@ static class Native
     public static Point CursorPosition => GetCursorPos(out POINT at) ? new Point(at.X, at.Y) : default;
 
     public static bool IsCtrlDown => GetAsyncKeyState(VK_CONTROL) < 0;
+    // The island normally does not own keyboard focus. Async modifier state also
+    // works when the key-down message was delivered to another application.
+    public static ModifierKeys InputModifiers =>
+        (GetAsyncKeyState(0x11) < 0 ? ModifierKeys.Control : 0)
+        | (GetAsyncKeyState(0x12) < 0 ? ModifierKeys.Alt : 0)
+        | (GetAsyncKeyState(0x10) < 0 ? ModifierKeys.Shift : 0)
+        | (GetAsyncKeyState(0x5b) < 0 || GetAsyncKeyState(0x5c) < 0 ? ModifierKeys.Windows : 0);
 
     public static bool RegisterShellHook(IntPtr hwnd) => RegisterShellHookWindow(hwnd);
 
@@ -190,6 +198,15 @@ static class Native
 
     public static void KeepOnTop(IntPtr hwnd) =>
         SetWindowPos(hwnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+
+    public static bool SetClickThrough(IntPtr hwnd, bool enabled)
+    {
+        if (hwnd == IntPtr.Zero) return false;
+        long style = GetWindowLongPtr(hwnd, GWL_EXSTYLE).ToInt64();
+        bool previous = (style & WS_EX_TRANSPARENT) != 0;
+        SetWindowLongPtr(hwnd, GWL_EXSTYLE, new IntPtr(enabled ? style | WS_EX_TRANSPARENT : style & ~WS_EX_TRANSPARENT));
+        return previous;
+    }
 
     public static void KeepPopupAbove(IntPtr popup, IntPtr owner)
     {

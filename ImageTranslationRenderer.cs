@@ -1,5 +1,4 @@
-using System.Globalization;
-using System.IO;
+﻿using System.IO;
 using System.Windows;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
@@ -25,15 +24,23 @@ static class ImageTranslationRenderer
 
     public static BitmapSource Render(BitmapSource original, ImageTranslationResult result)
     {
+        if (result.Blocks.All(b => b.PreserveOriginal))
+        {
+            if (original.IsFrozen) return original;
+            var unchanged = original.Clone(); unchanged.Freeze(); return unchanged;
+        }
         int width = original.PixelWidth, height = original.PixelHeight;
         var source = new FormatConvertedBitmap(original, PixelFormats.Bgra32, null, 0);
         byte[] pixels = new byte[width * height * 4]; source.CopyPixels(pixels, width * 4, 0);
+        result = ImageTranslationColors.Resolve(result, pixels, width, height);
+        var placements = ImageTranslationLayout.Plan(result, pixels, width, height);
         var visual = new DrawingVisual();
         using (var drawing = visual.RenderOpen())
         {
             drawing.DrawImage(original, new Rect(0, 0, width, height));
             foreach (var block in result.Blocks)
             {
+                if (block.PreserveOriginal) continue;
                 // Erase the old strokes using the line geometry and colors provided
                 // by OCR, like the website's SVG. This is not generative inpainting.
                 foreach (var line in block.Lines)
@@ -60,54 +67,40 @@ static class ImageTranslationRenderer
                         drawing.DrawRectangle(background, null, mask);
                     }
                 }
-                if (string.IsNullOrWhiteSpace(block.Translation)) continue;
-                Rect bounds = block.Bounds;
-                bounds.Inflate(1, 3); bounds.Intersect(new Rect(0, 0, width, height));
-                // Use genuinely empty, same-colored space to the right before
-                // shrinking longer Russian text. Never cross another text block.
-                double edge = width - 3;
-                foreach (var other in result.Blocks)
-                    if (!ReferenceEquals(other, block) && other.Bounds.Left >= bounds.Right
-                        && other.Bounds.Bottom > bounds.Top && other.Bounds.Top < bounds.Bottom)
-                        edge = Math.Min(edge, other.Bounds.Left - 5);
-                Color bg = block.Lines[0].Background;
-                int extension = (int)Math.Ceiling(bounds.Right);
-                for (; extension < edge; extension += 2)
-                {
-                    bool clear = true;
-                    foreach (int row in new[] { (int)bounds.Top, (int)(bounds.Top + bounds.Height / 2), Math.Max(0, (int)bounds.Bottom - 1) })
-                    {
-                        int pixel = (Math.Clamp(row, 0, height - 1) * width + Math.Clamp(extension, 0, width - 1)) * 4;
-                        if (Math.Abs(pixels[pixel] - bg.B) + Math.Abs(pixels[pixel + 1] - bg.G) + Math.Abs(pixels[pixel + 2] - bg.R) > 70) { clear = false; break; }
-                    }
-                    if (!clear) break;
-                }
-                bounds.Width = Math.Max(bounds.Width, Math.Min(extension - bounds.Left - 2, width - bounds.Left));
-                drawing.PushClip(new RectangleGeometry(bounds));
-                var color = block.Lines[0].Foreground;
-                var backgroundColor = block.Lines[0].Background;
-                if (Math.Abs(Luma(color) - Luma(backgroundColor)) < 45) color = Luma(backgroundColor) < 128 ? Colors.White : Colors.Black;
-                var typeface = new Typeface("Segoe UI");
-                double size = Math.Clamp(block.Lines.Average(l => l.Bounds.Height) * 1.35, 7, 100);
-                FormattedText Text(double fontSize) => new(block.Translation, CultureInfo.GetCultureInfo("ru-RU"), FlowDirection.LeftToRight,
-                    typeface, fontSize, new SolidColorBrush(color), 1) { MaxTextWidth = Math.Max(1, bounds.Width), TextAlignment = TextAlignment.Left };
-                var text = Text(size);
-                Geometry lettering = text.BuildGeometry(new Point());
-                // Shrink only as far as necessary. Explicit newlines and wrapped
-                // paragraphs survive; separate OCR blocks never share translations.
-                while ((lettering.Bounds.Height > bounds.Height + .5 || lettering.Bounds.Width > bounds.Width) && size > 5)
-                { size = Math.Max(5, size - .5); text = Text(size); lettering = text.BuildGeometry(new Point()); }
-                if (!lettering.Bounds.IsEmpty)
-                {
-                    drawing.PushTransform(new TranslateTransform(bounds.Left - lettering.Bounds.Left, bounds.Top - lettering.Bounds.Top));
-                    drawing.DrawGeometry(new SolidColorBrush(color), null, lettering);
-                    drawing.Pop();
-                }
-                drawing.Pop();
+            }
+            for (int i = 0; i < result.Blocks.Length; i++)
+            {
+                if (placements[i] is not { } placement) continue;
+                var line = result.Blocks[i].Lines[0];
+                Color color = line.Foreground;
+                if (Math.Abs(Luma(color) - Luma(line.Background)) < 45) color = Luma(line.Background) < 128 ? Colors.White : Colors.Black;
+                drawing.PushClip(new RectangleGeometry(placement.Bounds));
+                drawing.PushTransform(new TranslateTransform(placement.Origin.X, placement.Origin.Y));
+                drawing.DrawGeometry(new SolidColorBrush(color), null, placement.Lettering);
+                drawing.Pop(); drawing.Pop();
             }
         }
         var bitmap = new RenderTargetBitmap(width, height, 96, 96, PixelFormats.Pbgra32);
-        bitmap.Render(visual); bitmap.Freeze(); return bitmap;
+        bitmap.Render(visual);
+        if (!result.Blocks.Any(b => b.PreserveOriginal)) { bitmap.Freeze(); return bitmap; }
+        // Restore no-change regions as bytes, not another sampled DrawImage.
+        // This keeps their fonts, icons and backgrounds exact, even when a
+        // neighbouring translated line's mask overlaps their outermost pixels.
+        var rendered = new FormatConvertedBitmap(bitmap, PixelFormats.Bgra32, null, 0);
+        byte[] output = new byte[pixels.Length]; rendered.CopyPixels(output, width * 4, 0);
+        foreach (var line in result.Blocks.Where(b => b.PreserveOriginal).SelectMany(b => b.Lines))
+        {
+            int left = (int)Math.Clamp(Math.Floor(line.Bounds.Left - 1), 0, width), right = (int)Math.Clamp(Math.Ceiling(line.Bounds.Right + 1), 0, width);
+            int top = (int)Math.Clamp(Math.Floor(line.Bounds.Top - 1), 0, height), bottom = (int)Math.Clamp(Math.Ceiling(line.Bounds.Bottom + 1), 0, height);
+            if (right <= left || bottom <= top) continue;
+            for (int y = top; y < bottom; y++)
+            {
+                int offset = (y * width + left) * 4;
+                Buffer.BlockCopy(pixels, offset, output, offset, (right - left) * 4);
+            }
+        }
+        var kept = BitmapSource.Create(width, height, 96, 96, PixelFormats.Bgra32, null, output, width * 4);
+        kept.Freeze(); return kept;
     }
     static double Luma(Color c) => c.R * .2126 + c.G * .7152 + c.B * .0722;
 }

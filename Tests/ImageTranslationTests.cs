@@ -112,6 +112,7 @@ static partial class Program
                     && typeof(MainWindow).GetMethod("ImageTranslationWebsite_Click", Private) == null,
                     "translation contains no browser link or browser-opening handler");
                 var view = (FrameworkElement)main.FindName("ImageTranslationView");
+                Set(main, "_imageTranslationBusy", true); Call(main, "RefreshImageTranslationSettings");
                 Call(main, "SetImageTranslationStatus", "Перевожу на русский…");
                 double compactHeight = view.Height;
                 var status = (TextBlock)main.FindName("ImageTranslationStatus");
@@ -142,9 +143,9 @@ static partial class Program
                 overlay.Show(); Pump(180);
                 Check(overlay.IsVisible && overlay.Topmost && !overlay.ShowInTaskbar, "translated region opens as a topmost overlay, not a separate taskbar app");
                 var surface = (Grid)overlay.Content;
-                var displayedImage = surface.Children.OfType<Image>().Single();
-                var frame = surface.Children.OfType<Border>().Single(b => b.Name == "TranslationRegionFrame");
-                Check(frame.Visibility == Visibility.Visible && frame.BorderThickness == new Thickness(1) && !frame.IsHitTestVisible,
+                var displayedImage = surface.Children.OfType<Image>().Single(i => i.Name == "TranslationImage");
+                var frame = surface.Children.OfType<SelectionFrame>().Single(b => b.Name == "TranslationRegionFrame");
+                Check(frame.Visibility == Visibility.Visible && !frame.IsProcessing && !frame.IsHitTestVisible,
                     "translation region retains a fine visible outline without intercepting clicks");
                 surface.Width = original.PixelWidth; surface.Height = original.PixelHeight;
                 Save(surface, Path.Combine(output, "framed-region.png"));

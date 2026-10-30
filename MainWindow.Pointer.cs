@@ -29,6 +29,8 @@ public partial class MainWindow
     void Island_MouseEnter(object sender, MouseEventArgs e)
     {
         _hovered = true;
+        RetainMenuForPointer();
+        SyncHoverHotkeys();
         _collapseTimeout.Cancel();
         UpdateView();
         UpdateTargets();
@@ -37,14 +39,18 @@ public partial class MainWindow
     void Island_MouseLeave(object sender, MouseEventArgs e)
     {
         _hovered = _pressed = false;
+        _bindingSuppressedUps.Clear();
+        SyncHoverHotkeys();
         UpdateView();
         StirLyrics();
         UpdateTargets();
-        if (_panel != Panel.None) _collapseTimeout.Start(CollapseDelay);
+        if (_panel != Panel.None && !RetainMenuForPointer()) _collapseTimeout.Start(CollapseDelay);
     }
 
     void Root_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
     {
+        if (_recordingBinding != null) return;
+        _leftBindingModifiers = Native.InputModifiers;
         _pressed = true;
         if (_panel == Panel.None && !_ringing && Island.CaptureMouse())
         {
@@ -103,7 +109,7 @@ public partial class MainWindow
                 ThrowOpen(pace.Y);
                 break;
             default:
-                ToggleOpen();
+                DispatchBinding(new(BindingInput.LeftClick, _leftBindingModifiers));
                 break;
         }
         UpdateTargets();
@@ -176,41 +182,39 @@ public partial class MainWindow
 
     void Root_MouseRightButtonUp(object sender, MouseButtonEventArgs e)
     {
+        e.Handled = true;
         CancelGrab();
-        SelectPanel(_panel == Panel.Menu ? Panel.None : Panel.Menu);
-        UpdateSwitches(false);
-        UpdateView();
+        DispatchBinding(new(BindingInput.RightClick, Native.InputModifiers));
     }
 
     void Root_MouseUp(object sender, MouseButtonEventArgs e)
     {
-        if (e.ChangedButton != MouseButton.Middle) return;
+        if (e.ChangedButton is not (MouseButton.Middle or MouseButton.XButton1 or MouseButton.XButton2)) return;
         e.Handled = true;
         CancelGrab();
-        SelectPanel(Panel.None);
-        _sentAway = true;
-        _awayTimeout.Start(AwayDuration);
-        UpdateView();
-        UpdateTargets();
+        DispatchBinding(new(BindingGesture.Mouse(e.ChangedButton), Native.InputModifiers));
     }
 
     void Root_MouseWheel(object sender, MouseWheelEventArgs e)
     {
+        if (e.Delta == 0) return;
         bool up = e.Delta > 0;
         int step = up ? 1 : -1;
         e.Handled = true;
         if (ScrollMenuPanel(e)) return;
-        if (Native.IsCtrlDown) NavigateOpenPage(-step);
-        else if (_view == View.TimerSet) SetMinutes(_setupMinutes + step);
+        ModifierKeys modifiers = Native.InputModifiers;
+        if (modifiers != ModifierKeys.None)
+        {
+            DispatchBinding(new(up ? BindingInput.WheelUp : BindingInput.WheelDown, modifiers));
+            return;
+        }
+        if (_view == View.TimerSet) SetMinutes(_setupMinutes + step);
         else if (_view == View.Look && SizeRow.IsMouseOver) SetScale(Settings.Scale + step * ScaleStep);
         else if (_view == View.Look && GapRow.IsMouseOver) SetGap(Settings.Gap + step * GapStep);
         else if (_view == View.Look) ScrollLook(-step);
         else if (_view == View.Shelf && ShelfOverflow > 0) ScrollShelf(-step);
         else if (_view == View.ReleaseNotes) ScrollUpdateNotes(-step);
         else if (_view is View.Update or View.ImageTranslation) return;
-        else if (_view == View.MediaBig && Settings.AppVolume && _audio.AdjustAppVolume(_media.Source, step * WheelVolumeStep, out float level))
-            ShowPlayerVolume(level, false, true);
-        else if (IsVolumeAtLimit(up)) OvershootVolume(up);
-        else _audio.AdjustVolume(step * WheelVolumeStep);
+        else DispatchBinding(new(up ? BindingInput.WheelUp : BindingInput.WheelDown));
     }
 }

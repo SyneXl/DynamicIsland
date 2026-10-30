@@ -266,6 +266,7 @@ public partial class MainWindow
         ScrollViewer? scroll = _view switch
         {
             View.MenuLayout => MenuEditorScroll,
+            View.Bindings => BindingScroll,
             View.Menu => MenuScroll,
             View.Mixer => MixerScroll,
             View.ShelfNote => ShelfNoteScroll,

@@ -8,8 +8,12 @@ using System.Windows.Media;
 
 namespace DynamicIsland;
 
-sealed record ImageTextLine(Rect Bounds, string Text, Color Background, Color Foreground, double[] Curve);
-sealed record ImageTextBlock(Rect Bounds, string Text, ImageTextLine[] Lines, string Translation = "");
+sealed record ImageTextLine(Rect Bounds, string Text, Color Background, Color Foreground, double[] Curve)
+{
+    public Point[] BackgroundPoints { get; init; } = [];
+    public Point[] ForegroundPoints { get; init; } = [];
+}
+sealed record ImageTextBlock(Rect Bounds, string Text, ImageTextLine[] Lines, string Translation = "", bool PreserveOriginal = false);
 sealed record ImageTranslationResult(string Language, ImageTextBlock[] Blocks)
 {
     public string Text => string.Join(Environment.NewLine + Environment.NewLine, Blocks.Select(b => b.Translation));
@@ -17,9 +21,17 @@ sealed record ImageTranslationResult(string Language, ImageTextBlock[] Blocks)
 
 sealed class ImageTranslationException(string message) : Exception(message);
 
+enum ImageTranslationProvider { Yandex, Google }
+
+interface IImageTranslator : IDisposable
+{
+    Task<ImageTranslationResult> TranslateAsync(byte[] png, int width, int height,
+        IProgress<string>? progress = null, CancellationToken cancellation = default);
+}
+
 // A separate anonymous session. No browser cookies, HAR data, account tokens or
 // screenshots are persisted. Only the region explicitly selected by the user is sent.
-sealed class YandexImageTranslator : IDisposable
+sealed class YandexImageTranslator : IImageTranslator
 {
     internal const string Website = "https://translate.yandex.ru/ocr";
     internal const string RecognizeUrl = "https://translate.yandex.net/ocr/v1.1/recognize";
@@ -161,7 +173,11 @@ sealed class YandexImageTranslator : IDisposable
                 double[] curve = [];
                 if (box.TryGetProperty("polyCoefs", out var poly) && poly.ValueKind == JsonValueKind.Object && Number(poly, "fromXtoY", 1) != 0)
                     curve = [Number(poly, "a3"), Number(poly, "a2"), Number(poly, "a1"), Number(poly, "a0"), Math.Clamp(Number(poly, "hh", bounds.Height), 1, 300)];
-                lines.Add(new(bounds, text, ReadColor(box, "backgroundColor", Colors.Black), ReadColor(box, "textColor", Colors.White), curve));
+                lines.Add(new(bounds, text, ReadColor(box, "backgroundColor", Colors.Black), ReadColor(box, "textColor", Colors.White), curve)
+                {
+                    BackgroundPoints = ReadColorPoints(box, "backgroundColor", width, height),
+                    ForegroundPoints = ReadColorPoints(box, "textColor", width, height),
+                });
             }
             if (lines.Count == 0) continue;
             Rect area = lines[0].Bounds; foreach (var line in lines.Skip(1)) area.Union(line.Bounds);
@@ -200,6 +216,19 @@ sealed class YandexImageTranslator : IDisposable
     {
         if (!e.TryGetProperty(name, out var p) || p.ValueKind != JsonValueKind.Object) return fallback;
         return Color.FromRgb((byte)Math.Clamp(Number(p, "r", fallback.R), 0, 255), (byte)Math.Clamp(Number(p, "g", fallback.G), 0, 255), (byte)Math.Clamp(Number(p, "b", fallback.B), 0, 255));
+    }
+    static Point[] ReadColorPoints(JsonElement box, string name, int width, int height)
+    {
+        if (!box.TryGetProperty(name, out var color) || color.ValueKind != JsonValueKind.Object
+            || !color.TryGetProperty("Points", out var points) || points.ValueKind != JsonValueKind.Array) return [];
+        var result = new List<Point>();
+        foreach (var p in points.EnumerateArray().Take(64))
+        {
+            if (p.ValueKind != JsonValueKind.Object) continue;
+            double x = Number(p, "x", -1), y = Number(p, "y", -1);
+            if (x >= 0 && y >= 0 && x < width && y < height) result.Add(new(x, y));
+        }
+        return result.ToArray();
     }
     public void Dispose() => _http.Dispose();
 }

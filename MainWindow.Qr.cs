@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Windows;
 using System.Windows.Media;
+using System.Windows.Media.Animation;
 
 namespace DynamicIsland;
 
@@ -12,6 +13,9 @@ public partial class MainWindow
     static readonly TimeSpan FocusSettleTime = TimeSpan.FromSeconds(3);
 
     bool _readingQr, _pickingArea;
+    bool _pickerObscured;
+    Rect _pickerSelection = Rect.Empty;
+    Func<AreaPicker> _makeAreaPicker = () => new AreaPicker(QrReader.Desktop);
     DateTime _focusSettlesAt;
 
     bool IsFocusUnsettled => _pickingArea || DateTime.UtcNow < _focusSettlesAt;
@@ -51,18 +55,40 @@ public partial class MainWindow
         if (looked) ShowQr(found, pickArea);
     }
 
-    async Task<Int32Rect?> PickAreaAsync(string title = "Обведите QR-код", string detail = "Esc или правая кнопка — отмена", Glyph glyph = Glyph.Qr)
+    void PickerSelectionChanged(Rect selection)
     {
-        var picker = new AreaPicker(QrReader.Desktop);
+        _pickerSelection = selection;
+        bool overlap = !selection.IsEmpty && IsLoaded && selection.IntersectsWith(MenuScreenBounds(Math.Max(_width.Value, MinPillSize), Math.Max(_height.Value, MinPillSize)));
+        if (overlap == _pickerObscured) return;
+        _pickerObscured = overlap;
+        SyncGlass(false);
+        BeginAnimation(OpacityProperty, new DoubleAnimation(overlap ? .12 : 1, TimeSpan.FromMilliseconds(SystemParameters.ClientAreaAnimation ? 130 : 0))
+            { EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } });
+    }
+
+    async Task<Int32Rect?> PickAreaAsync(string title = "Обведите QR-код", string detail = "Esc или правая кнопка — отмена", Glyph glyph = Glyph.Qr, CancellationToken cancellation = default)
+    {
+        cancellation.ThrowIfCancellationRequested();
+        var picker = _makeAreaPicker();
         _pickingArea = true;
-        Notify(glyph, Brushes.White, title, detail, PickerHintSeconds, true);
+        bool wasClickThrough = false, inputChanged = false;
+        picker.SelectionChanged += PickerSelectionChanged;
         try
         {
+            wasClickThrough = Native.SetClickThrough(_hwnd, true); inputChanged = true;
+            SyncGlass(false);
+            Notify(glyph, Brushes.White, title, detail, PickerHintSeconds, true);
+            using var cancel = cancellation.Register(() => Dispatcher.BeginInvoke(new Action(() => { if (picker.IsVisible) picker.Close(); })));
+            cancellation.ThrowIfCancellationRequested();
             picker.ShowDialog();
         }
         finally
         {
+            picker.SelectionChanged -= PickerSelectionChanged;
+            PickerSelectionChanged(Rect.Empty);
+            if (inputChanged) Native.SetClickThrough(_hwnd, wasClickThrough);
             _pickingArea = false;
+            SyncGlass(false);
             _focusSettlesAt = DateTime.UtcNow + FocusSettleTime;
             EndTransient();
         }

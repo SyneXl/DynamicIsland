@@ -272,14 +272,14 @@ public partial class MainWindow
     {
         int was = Settings.Scale;
         Settings.Scale = percent;
-        if (Settings.Scale != was) ApplyLook();
+        if (Settings.Scale != was) { ResetMenuRetention(); ApplyLook(); }
     }
 
     void SetGap(int px)
     {
         int was = Settings.Gap;
         Settings.Gap = px;
-        if (Settings.Gap != was) ApplyLook();
+        if (Settings.Gap != was) { ResetMenuRetention(); ApplyLook(); }
     }
 
     void Dots_Click(object sender, RoutedEventArgs e)

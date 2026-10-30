@@ -54,6 +54,9 @@ public partial class App : Application
                     && window.FindName("CodexAutoSwitch") != null
                     && window.FindName("MenuLayoutView") is FrameworkElement { Height: > 0 }
                     && window.FindName("MenuLayoutRow") != null
+                    && window.FindName("BindingsView") is FrameworkElement { Height: > 0 }
+                    && window.FindName("BindingScroll") != null
+                    && window.FindName("BindingsRow") != null
                     && window.FindName("UpdatePage") != null
                     && window.FindName("ReleaseNotesPage") != null
                     && window.FindName("UpdateWhatsNewButton") != null

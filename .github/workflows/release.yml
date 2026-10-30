@@ -61,6 +61,16 @@ jobs:
         run: dotnet run --project Tests/DynamicIsland.Tests.csproj -c Release --no-build -- --release-notes-tests artifacts/release-notes
       - name: Image translation and overlay controls
         run: dotnet run --project Tests/DynamicIsland.Tests.csproj -c Release --no-build -- --image-translation-tests artifacts/image-translation
+      - name: Custom bindings and hover-only input controls
+        run: dotnet run --project Tests/DynamicIsland.Tests.csproj -c Release --no-build -- --bindings-tests artifacts/bindings
+      - name: Menu resize retention controls
+        run: dotnet run --project Tests/DynamicIsland.Tests.csproj -c Release --no-build -- --menu-retention-tests artifacts/menu-retention
+      - name: Translation provider protocol controls
+        run: dotnet run --project Tests/DynamicIsland.Tests.csproj -c Release --no-build -- --google-image-translation-tests artifacts/google-image-translation
+      - name: Translation color and selection controls
+        run: dotnet run --project Tests/DynamicIsland.Tests.csproj -c Release --no-build -- --translation-polish-tests artifacts/translation-polish
+      - name: Full translation layout and typography controls
+        run: dotnet run --project Tests/DynamicIsland.Tests.csproj -c Release --no-build -- --translation-layout-tests artifacts/translation-layout
       - name: Update bubble, mixer and shelf controls
         run: dotnet run --project Tests/DynamicIsland.Tests.csproj -c Release --no-build -- --island-features-tests artifacts/island-features
       - name: Quiet appearance and interaction transitions

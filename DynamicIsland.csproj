@@ -11,7 +11,7 @@
     <AssemblyName>DynamicIsland</AssemblyName>
     <RootNamespace>DynamicIsland</RootNamespace>
     <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
-    <Version>1.32.4</Version>
+    <Version>1.32.5</Version>
   </PropertyGroup>
 
   <!-- Deterministic media-provider doubles are opt-in for regression tests only. -->

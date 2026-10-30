@@ -47,6 +47,7 @@ public partial class MainWindow
         bool compact = shape.Height < CompactMaxHeight;
         double pull = RubberBand(_pull, MaxPull), lean = Math.Sign(_leanDrag) * RubberBand(Math.Abs(_leanDrag), MaxLean);
         bool dragging = _grab is Grab.Pull or Grab.Lean;
+        RetainMenuBeforeResize(shape.Width + pull * PullWidening + Math.Abs(lean) * LeanStretch, shape.Height + pull);
         _width.Target = shape.Width + pull * PullWidening + Math.Abs(lean) * LeanStretch;
         _height.Target = shape.Height + pull;
         _radius.Target = shape.Radius + pull * PullRounding;
@@ -157,6 +158,9 @@ public partial class MainWindow
         PlaceNavigation(pill);
         PlaceBubble(pill, r, scale);
         CutGlass(dpi);
+        // The hint/page itself can resize under a stationary selection. Recheck
+        // its actual screen footprint, not only the last mouse-move geometry.
+        if (!_pickerSelection.IsEmpty) PickerSelectionChanged(_pickerSelection);
     }
 
     void SharpenLyricCache(double dpi)
@@ -201,18 +205,18 @@ public partial class MainWindow
 
     void SyncGlass(bool animate)
     {
-        if (Settings.Glass && !IsPassiveAppearance)
+        if (Settings.Glass && !IsPassiveAppearance && !_pickingArea && !_pickerObscured)
         {
             _glass.Show();
             Reshape();
         }
-        if (IsPassiveAppearance) _glass.Hide();
-        Body.Thin(Settings.Glass && !IsPassiveAppearance, animate ? GlassTime : TimeSpan.Zero, HideGlassOnceCovered);
+        if (IsPassiveAppearance || _pickingArea || _pickerObscured) _glass.Hide();
+        Body.Thin(Settings.Glass && !IsPassiveAppearance && !_pickingArea && !_pickerObscured, animate ? GlassTime : TimeSpan.Zero, HideGlassOnceCovered);
     }
 
     void HideGlassOnceCovered()
     {
-        if (Settings.Glass && !IsPassiveAppearance || !_glass.IsOn) return;
+        if (Settings.Glass && !IsPassiveAppearance && !_pickingArea && !_pickerObscured || !_glass.IsOn) return;
         _glass.Hide();
         Reshape();
     }

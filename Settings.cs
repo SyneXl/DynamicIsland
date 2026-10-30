@@ -74,6 +74,23 @@ static class Settings
     static int _gap = Math.Clamp(Read(nameof(Gap), DefaultGap), 0, MaxGap);
     static int _accent = Read(nameof(Accent), 0);
     static MenuLayout _menu = MenuLayout.Parse(Read("MenuLayout", ""));
+    static KeyBindings _bindings = KeyBindings.Parse(Read("KeyBindings", ""));
+    static ImageTranslationProvider _imageTranslationProvider = Read("ImageTranslationProvider", 0) == 1
+        ? ImageTranslationProvider.Google : ImageTranslationProvider.Yandex;
+    public static ImageTranslationProvider ImageTranslationProvider => _imageTranslationProvider;
+    public static bool TrySetImageTranslationProvider(ImageTranslationProvider value)
+    {
+        if (!Enum.IsDefined(value) || !Write("ImageTranslationProvider", (int)value, RegistryValueKind.DWord)) return false;
+        _imageTranslationProvider = value;
+        return true;
+    }
+    public static KeyBindings Bindings => _bindings;
+    public static bool TrySetBindings(KeyBindings value)
+    {
+        if (!Write("KeyBindings", value.Serialize(), RegistryValueKind.String)) return false;
+        _bindings = value;
+        return true;
+    }
     static ThronePreferences _throne = ThronePreferences.Parse(Read("Throne", ""));
     public static ThronePreferences Throne => _throne;
     public static bool TrySetThrone(ThronePreferences value)
