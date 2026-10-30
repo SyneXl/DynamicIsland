@@ -78,8 +78,12 @@ static partial class Program
                 "long release notes never push the update button outside the island");
             Check(((Spring)typeof(MainWindow).GetField("_height", Private)!.GetValue(window)!).Target == updatePage.Height,
                 "outer pill follows the measured update page instead of clipping it to 150 pixels");
-            Check((double)typeof(MainWindow).GetProperty("UpdateNotesOverflow", Private)!.GetValue(window)! > 0, "long update notes have a real scroll range");
             Save(root, Path.Combine(output, "update-available.png"));
+            Check(window.FindName("UpdateWhatsNewButton") is Button { Visibility: Visibility.Visible }
+                && !updatePage.IsAncestorOf((DependencyObject)window.FindName("UpdateNotes")), "what's new is a separate update-page item, not an inline wall of text");
+            Page("ReleaseNotes");
+            Check((double)typeof(MainWindow).GetProperty("UpdateNotesOverflow", Private)!.GetValue(window)! > 0, "long update notes have a real scroll range on their own page");
+            Save(root, Path.Combine(output, "release-notes.png"));
             Call(window, "ScrollUpdateNotes", 100);
             var noteScroll = (Spring)typeof(MainWindow).GetField("_updateNotesScroll", Private)!.GetValue(window)!;
             noteScroll.Snap(noteScroll.Target); Call(window, "ApplyShape");

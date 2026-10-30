@@ -34,6 +34,7 @@ public partial class MainWindow
         DateTime now = DateTime.Now;
         IdleClock.Text = BigClock.Text = now.ToString("HH:mm");
         BigDate.Text = now.ToString("dddd, d MMMM", Russian);
+        SyncHomeThrone();
     }
 
     void CheckFullscreen()
@@ -128,6 +129,7 @@ public partial class MainWindow
     {
         bool hasBattery = Native.TryGetBattery(out int percent, out bool plugged);
         InfoBatRow.SetVisible(hasBattery);
+        SyncHomeHeight();
         if (!hasBattery) return;
 
         InfoBat.Text = percent + "%";
@@ -167,6 +169,7 @@ public partial class MainWindow
 
         Glyph icon = device.Headphones ? Glyph.Headphones : Glyph.Speaker;
         InfoHeadsetRow.SetVisible(known);
+        SyncHomeHeight();
         PlayerHeadset.SetVisible(known);
         InfoHeadsetIcon.Kind = PlayerHeadsetIcon.Kind = icon;
         InfoHeadset.Text = PlayerHeadsetText.Text = level + "%";

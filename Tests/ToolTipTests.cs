@@ -85,6 +85,10 @@ static partial class Program
             Check(tooltip.Style == (Style)window.FindResource("IslandToolTip"), "native popup uses the island tooltip style");
             Check(tooltip.FontSize == 12 && tooltip.FontFamily.Source.Contains("SF Pro Text") && tooltip.MaxWidth == 280,
                 "tooltip has the embedded body font and a bounded readable width");
+            Check(tooltip.Background is SolidColorBrush { Color: var background } && background == Color.FromRgb(16, 16, 16),
+                "tooltip retains an opaque near-black card");
+            Check(tooltip.BorderThickness == new Thickness(0) && tooltip.BorderBrush is SolidColorBrush { Color.A: 0 },
+                "tooltip has no visible edge outline");
             Check(tooltip.ActualWidth <= 280 && tooltip.ActualHeight < 100, "hint wraps into a compact card instead of a long desktop strip");
             Check(!tooltip.IsHitTestVisible && !tooltip.Focusable && Mouse.Captured == null, "tooltip does not capture pointer or keyboard focus");
             Check(GetWindow(popup, 4) == parent && WindowAbove(popup, parent), "tooltip HWND is owned by and above the island");
@@ -99,6 +103,10 @@ static partial class Program
                 "Cyrillic hint is actually drawn from the embedded SF Pro font");
             var bitmap = new RenderTargetBitmap((int)Math.Ceiling(tooltip.ActualWidth), (int)Math.Ceiling(tooltip.ActualHeight), 96, 96, PixelFormats.Pbgra32);
             bitmap.Render(tooltip);
+            var edgePixel = new byte[4]; bitmap.CopyPixels(new Int32Rect(3, bitmap.PixelHeight / 2, 1, 1), edgePixel, 4, 0);
+            Check(edgePixel.SequenceEqual(new byte[] { 16, 16, 16, 255 }), "rendered card edge is dark fill, not a bright border");
+            bitmap.CopyPixels(new Int32Rect(0, 0, 1, 1), edgePixel, 4, 0);
+            Check(edgePixel[3] == 0, "borderless tooltip still has rounded transparent corners");
             var encoder = new PngBitmapEncoder(); encoder.Frames.Add(BitmapFrame.Create(bitmap));
             using (var file = File.Create(Path.Combine(output, "tooltip.png"))) encoder.Save(file);
             File.WriteAllText(Path.Combine(output, "native.json"), JsonSerializer.Serialize(new { parent = parent.ToInt64(), popup = popup.ToInt64(), owned = GetWindow(popup, 4) == parent,

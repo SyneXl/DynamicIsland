@@ -18,7 +18,7 @@ public partial class MainWindow
     ZapretStatus? _zapretStatus;
     CancellationTokenSource? _zapretScan;
     string? _zapretRoot, _zapretStrategy;
-    bool _zapretBusy, _zapretInstalling, _zapretSpinnerActive, _zapretSearched, _zapretClosed;
+    bool _zapretBusy, _zapretInstalling, _zapretSpinnerActive, _zapretSearched, _zapretClosed, _zapretReadError;
     Task? _zapretRefreshTask;
     long _zapretStatusAt;
     string _zapretMessage = "";
@@ -61,7 +61,7 @@ public partial class MainWindow
         {
             var status = await Task.Run(_zapretSystem.Read);
             if (_zapretClosed) return;
-            _zapretStatus = status; _zapretStatusAt = Environment.TickCount64;
+            _zapretStatus = status; _zapretStatusAt = Environment.TickCount64; _zapretReadError = false;
             if (_zapretRoot == null && status.Service.Root is { } active)
             {
                 var install = await Task.Run(() => ZapretInstallation.Inspect(active));
@@ -69,7 +69,7 @@ public partial class MainWindow
             }
             SyncZapret();
         }
-        catch (Exception ex) { _zapretMessage = ex.Message; SyncZapret(); }
+        catch (Exception ex) { _zapretReadError = true; _zapretMessage = ex.Message; SyncZapret(); }
     }
 
     async Task ScanZapretAsync()
@@ -201,7 +201,7 @@ public partial class MainWindow
         var service = _zapretStatus?.Service;
         bool running = service?.Running == true;
         bool standalone = _zapretStatus?.ProcessRoots.Length > 0 && !running;
-        bool known = service != null && service.Error == null && _zapretStatus?.UnidentifiedProcesses == 0;
+        bool known = !_zapretReadError && service != null && service.Error == null && _zapretStatus?.UnidentifiedProcesses == 0;
         bool transitioning = service?.Installed == true && !service.DeletePending && service.State is not (1 or 4);
         ZapretState.Text = _zapretBusy ? _zapretInstalling ? "Включаю…" : "Выключаю…" : !known ? "Нет связи" : transitioning ? "Переход…" : running || standalone ? "Включён" : "Выключен";
         ZapretState.Foreground = running || standalone ? _green : _dim;
@@ -212,17 +212,18 @@ public partial class MainWindow
         ZapretStrategyButton.IsEnabled = !_zapretBusy && _zapretRoot != null && _zapretInstalls.ContainsKey(_zapretRoot);
         ZapretFolderButton.IsEnabled = ZapretBrowseButton.IsEnabled = !_zapretBusy;
         bool remove = running || standalone;
+        bool working = _zapretBusy || _networkStart == NetworkApp.Zapret && _networkConflictAnswer == null;
         string action = remove ? "Выключить Zapret" : "Включить Zapret";
         AutomationProperties.SetName(ZapretAction, action);
         ZapretAction.ToolTip = remove ? "Выключить Zapret" : "Включить выбранную стратегию";
-        ZapretPlayIcon.Visibility = !_zapretBusy && !remove ? Visibility.Visible : Visibility.Collapsed;
-        ZapretPauseIcon.Visibility = !_zapretBusy && remove ? Visibility.Visible : Visibility.Collapsed;
-        ZapretSpinner.Visibility = _zapretBusy ? Visibility.Visible : Visibility.Collapsed;
-        if (_zapretSpinnerActive != _zapretBusy)
+        ZapretPlayIcon.Visibility = !working && !remove ? Visibility.Visible : Visibility.Collapsed;
+        ZapretPauseIcon.Visibility = !working && remove ? Visibility.Visible : Visibility.Collapsed;
+        ZapretSpinner.Visibility = working ? Visibility.Visible : Visibility.Collapsed;
+        if (_zapretSpinnerActive != working)
         {
-            _zapretSpinnerActive = _zapretBusy;
+            _zapretSpinnerActive = working;
             ((RotateTransform)ZapretSpinner.RenderTransform).BeginAnimation(RotateTransform.AngleProperty,
-                _zapretBusy ? new DoubleAnimation(0, 360, TimeSpan.FromMilliseconds(900)) { RepeatBehavior = RepeatBehavior.Forever } : null);
+                working ? new DoubleAnimation(0, 360, TimeSpan.FromMilliseconds(900)) { RepeatBehavior = RepeatBehavior.Forever } : null);
         }
         bool selected = _zapretRoot != null && _zapretStrategy != null && _zapretInstalls.ContainsKey(_zapretRoot);
         ZapretAction.IsEnabled = !_zapretBusy && !transitioning && known && (remove || selected);
@@ -245,37 +246,41 @@ public partial class MainWindow
         ZapretView.Height = Math.Min(400, height);
         if (_view == View.Zapret) UpdateTargets();
         ZapretRefresh.IsEnabled = !_zapretBusy;
+        SyncNetworkConflict();
     }
 
     async void ZapretAction_Click(object sender, RoutedEventArgs e)
     {
-        if (_zapretBusy || _zapretStatus == null) return;
+        if (!ZapretAction.IsEnabled || _zapretBusy || _zapretStatus == null) return;
         bool remove = _zapretStatus.Service.Running || _zapretStatus.ProcessRoots.Length > 0;
-        await ExecuteZapretAsync(!remove, _zapretRoot, _zapretStrategy, _zapretStatus);
+        if (remove) await ExecuteZapretAsync(false, _zapretRoot, _zapretStrategy, _zapretStatus);
+        else await StartNetworkAsync(NetworkApp.Zapret);
     }
     async void ZapretCleanup_Click(object sender, RoutedEventArgs e)
     {
-        if (_zapretStatus != null) await ExecuteZapretAsync(false, null, null, _zapretStatus);
+        if (_networkStart == null && _zapretStatus != null) await ExecuteZapretAsync(false, null, null, _zapretStatus);
     }
     async void ZapretApply_Click(object sender, RoutedEventArgs e)
     {
-        if (_zapretStatus != null) await ExecuteZapretAsync(true, _zapretRoot, _zapretStrategy, _zapretStatus);
+        if (_networkStart == null && _zapretStatus != null) await StartNetworkAsync(NetworkApp.Zapret, replaceRunning: true);
     }
-    async Task ExecuteZapretAsync(bool install, string? root, string? strategy, ZapretStatus status)
+    async Task<bool> ExecuteZapretAsync(bool install, string? root, string? strategy, ZapretStatus status)
     {
-        if (_zapretBusy) return;
+        if (_zapretBusy) return false;
         _zapretBusy = true; _zapretInstalling = install; _zapretMessage = ""; SyncZapret();
         try
         {
             await RefreshZapretAsync();
-            if (_zapretClosed) return;
+            if (_zapretClosed) return false;
+            if (_zapretReadError) throw new IOException("Не удалось проверить Zapret. Повтори действие.");
             var fresh = _zapretStatus ?? status;
             if (fresh.Service.Error != null) throw new IOException(fresh.Service.Error);
             if (fresh.Identity != status.Identity) throw new IOException("Конфигурация изменилась. Повтори действие.");
             var result = await _runZapretOperation(install, root, strategy, fresh);
             if (!_zapretClosed) _zapretMessage = result.Success ? "" : result.Message;
+            return result.Success;
         }
-        catch (Exception ex) { _zapretMessage = ex.Message; }
+        catch (Exception ex) { _zapretMessage = ex.Message; return false; }
         finally
         {
             if (!_zapretClosed) await RefreshZapretAsync();

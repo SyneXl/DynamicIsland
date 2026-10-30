@@ -86,6 +86,8 @@ static partial class Program
         Check(ThroneData.LatencyText(-2) == "Недоступен" && ThroneData.LatencyText(0) == "—", "test failures are not displayed as negative ping");
         Check(!ThroneStatus.Parse(ThroneJson("{\"state\":\"connecting\",\"profile\":null,\"last_profile_id\":1}")).Running, "connecting response is not successful connection");
         Check(ThronePreferences.Parse("broken") == new ThronePreferences(), "broken preferences recover without changing Throne");
+        Check(ThronePreferences.Parse("{\"Group\":7,\"Profile\":9}").ShowOnHome, "existing preferences enable the home shortcut for compatible installations without migration writes");
+        Check(!ThronePreferences.Parse(new ThronePreferences(ShowOnHome: false).Serialize()).ShowOnHome, "home shortcut opt-out survives serialization");
         var pref = new ThronePreferences(@"C:\sample", @"C:\sample\Throne.exe", 7, 9, true);
         Check(ThronePreferences.Parse(pref.Serialize()) == pref, "selection and sorting survive restart without a stored API secret");
     }
@@ -181,10 +183,13 @@ static partial class Program
     {
         public readonly List<(string Method, string Path, string Body)> Requests = [];
         public string State = "idle"; public int Profile = -1; public bool Fail; public int JobPolls; public bool JobCancelled;
+        public string? ActiveName, ProfilesJson;
         public Task<JsonElement> CallAsync(string method, string path, object? body = null, Dictionary<string, string>? query = null, CancellationToken cancel = default)
         {
             string text = JsonSerializer.Serialize(body); Requests.Add((method, path, text));
             if (Fail) throw new ThroneApiException("busy", 409);
+            if (path == "/v1/groups") return Task.FromResult(ThroneJson("{\"groups\":[{\"id\":1,\"name\":\"Subscription One\",\"archived\":false,\"subscription\":true,\"profile_count\":3},{\"id\":2,\"name\":\"Subscription Two\",\"archived\":false,\"subscription\":true,\"profile_count\":2}]}"));
+            if (path == "/v1/profiles" && ProfilesJson != null) return Task.FromResult(ThroneJson(ProfilesJson));
             if (path == "/v1/tests" && method == "POST") { JobPolls = 0; JobCancelled = false; return Task.FromResult(ThroneJson("{\"id\":41,\"state\":\"running\"}")); }
             if (path == "/v1/tests/41")
             {
@@ -194,7 +199,7 @@ static partial class Program
             if (path == "/v1/profiles") return Task.FromResult(ThroneJson("{\"profiles\":[{\"id\":11,\"group\":1,\"name\":\"DE Frankfurt\",\"latency_ms\":85,\"type\":\"vless\",\"running\":false},{\"id\":12,\"group\":1,\"name\":\"NL Amsterdam\",\"latency_ms\":25,\"type\":\"vless\",\"running\":false},{\"id\":21,\"group\":2,\"name\":\"FI Helsinki\",\"latency_ms\":30,\"type\":\"vless\",\"running\":false}]}"));
             if (method == "PUT") { Profile = ThroneJson(text).GetProperty("profile").GetInt32(); State = "connecting"; }
             if (method == "DELETE") { State = "stopping"; }
-            return Task.FromResult(ThroneJson(JsonSerializer.Serialize(new { state = State, profile = Profile < 0 ? null : new { id = Profile, name = "Server " + Profile }, last_profile_id = 11 })));
+            return Task.FromResult(ThroneJson(JsonSerializer.Serialize(new { state = State, profile = Profile < 0 ? null : new { id = Profile, name = ActiveName ?? "Server " + Profile }, last_profile_id = 11 })));
         }
     }
     static void ThroneWindowTests(string output)
@@ -209,14 +214,20 @@ static partial class Program
             Call(window, "ApplyShape");
             void Invalidate(DependencyObject node)
             {
-                if (node is UIElement element) element.InvalidateVisual();
+                if (node is UIElement element) { element.CacheMode = null; element.InvalidateVisual(); }
                 for (int i = 0; i < System.Windows.Media.VisualTreeHelper.GetChildrenCount(node); i++) Invalidate(System.Windows.Media.VisualTreeHelper.GetChild(node, i));
             }
             Invalidate(root); root.UpdateLayout(); Pump(150); Save(root, Path.Combine(output, name));
         }
-        void Click(string name) => ((Button)window.FindName(name)).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        void Click(string name)
+        {
+            ((Button)window.FindName(name)).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            long deadline = Environment.TickCount64 + 5000;
+            while (typeof(MainWindow).GetField("_networkStart", Private)!.GetValue(window) != null && Environment.TickCount64 < deadline) Pump(10);
+        }
         void Complete(Task task) { while (!task.IsCompleted) Pump(10); task.GetAwaiter().GetResult(); }
         var fake = new ThroneFakeApi();
+        Set(window, "_zapretSystem", new FakeZapretSystem());
         Set(window, "_throneApi", fake); Set(window, "_throneInstallation", new ThroneDiscoveryResult(null, null, true, true, null, null));
         Set(window, "_saveThronePreferences", (Func<ThronePreferences, bool>)(_ => true));
         Set(window, "_thronePreferences", new ThronePreferences(Group: 1, Profile: 11));
@@ -235,6 +246,7 @@ static partial class Program
         Capture("throne-on.png");
         Page("ThroneServers"); Call(window, "FillThroneServers");
         ((Button)((StackPanel)window.FindName("ThroneServerRows")).Children[1]).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        while (typeof(MainWindow).GetField("_networkStart", Private)!.GetValue(window) != null) Pump(10);
         Check(fake.Profile == 12 && fake.Requests.Last().Method == "PUT", "server choice switches the running VPN via API");
         fake.State = "running"; Complete((Task)Call(window, "RefreshThroneAsync", false)!); Click("ThroneAction");
         Check(fake.Requests.Last().Method == "DELETE" && fake.Requests.Last().Path == "/v1/connection", "pause stops only the API's connection, not another VPN or process");
@@ -260,7 +272,7 @@ static partial class Program
         ((Button)((StackPanel)window.FindName("ThroneGroupRows")).Children[1]).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
         Check(((TextBlock)window.FindName("ThroneGroupText")).Text == "Subscription Two" && fake.Requests.Count(r => r.Method != "GET") == mutations, "group selection only changes browsing and next-start preference");
         fake.Fail = true; Page("Throne"); Click("ThroneAction");
-        Check(((TextBlock)window.FindName("ThroneNote")).Text.Contains("занят") && ((TextBlock)window.FindName("ThroneState")).Text == "Выключен", "API failure leaves confirmed state intact with short error");
+        Check(((TextBlock)window.FindName("ThroneNote")).Text.Contains("проверить Throne") && ((TextBlock)window.FindName("ThroneState")).Text == "Нет связи", "failed preflight does not use a stale idle status to start VPN");
         Set(window, "_throneApi", null!); Set(window, "_throneStatus", null!); Set(window, "_throneMessage", ""); Set(window, "_throneInstallation", new ThroneDiscoveryResult(null, null, false, false, null, null)); Call(window, "SyncThrone");
         Check(((Button)window.FindName("ThroneUpdate")).Visibility == Visibility.Visible, "old or absent client offers latest installer");
         Check(((Button)window.FindName("ThroneBrowse")).Visibility == Visibility.Visible && ((Button)window.FindName("ThroneDataFolder")).Visibility == Visibility.Collapsed,
@@ -303,6 +315,7 @@ static partial class Program
         Set(window, "_throneStatus", new ThroneStatus("idle", -1, "", 11)); Call(window, "SyncThrone");
         Check(((Button)window.FindName("ThroneBrowse")).Visibility == Visibility.Collapsed && ((Button)window.FindName("ThroneDataFolder")).Visibility == Visibility.Collapsed,
             "successful reconnection automatically hides both manual controls again");
+        ThroneHomeTests(window, output, Capture);
         ThroneInstallerWindowTests(window, output, Capture);
     }
 

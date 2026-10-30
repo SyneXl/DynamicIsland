@@ -7,7 +7,7 @@ using Microsoft.Win32;
 
 namespace DynamicIsland;
 
-sealed record ThronePreferences(string? DataDirectory = null, string? Executable = null, int Group = -1, int Profile = -1, bool SortByLatency = false)
+sealed record ThronePreferences(string? DataDirectory = null, string? Executable = null, int Group = -1, int Profile = -1, bool SortByLatency = false, bool ShowOnHome = true)
 {
     public static ThronePreferences Parse(string value)
     {

@@ -10,7 +10,7 @@ namespace DynamicIsland;
 static class UpdateHandoff
 {
     internal sealed record Plan(string Target, string Payload, string Sha256, string Version,
-        string OriginalSha256, int ParentPid, long ParentStarted, string[]? TestArguments = null);
+        string OriginalSha256, int ParentPid, long ParentStarted, string[]? TestArguments = null, ReleaseNotesSnapshot? Notes = null);
     static string UpdatesRoot => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "DynamicIsland", "Updates");
     public static string NewFolder()
     {
@@ -31,7 +31,7 @@ static class UpdateHandoff
         using (new FileStream(probe, FileMode.CreateNew, FileAccess.Write, FileShare.None, 1, FileOptions.DeleteOnClose)) { }
         using var parent = Process.GetCurrentProcess();
         var plan = new Plan(Path.GetFullPath(update.Target), Path.GetFullPath(update.Payload), update.Sha256, update.Version,
-            Hash(update.Target), parent.Id, parent.StartTime.ToUniversalTime().Ticks);
+            Hash(update.Target), parent.Id, parent.StartTime.ToUniversalTime().Ticks, Notes: update.Notes);
         string path = Path.Combine(folder, "plan.json");
         File.WriteAllText(path, JsonSerializer.Serialize(plan));
         var start = new ProcessStartInfo(update.Payload) { UseShellExecute = false, CreateNoWindow = true, WorkingDirectory = folder };
@@ -41,7 +41,7 @@ static class UpdateHandoff
         helper.Dispose();
     }
 
-    public static async Task<int> RunAsync(string manifest, TimeSpan? readyTimeout = null)
+    public static async Task<int> RunAsync(string manifest, TimeSpan? readyTimeout = null, Func<ReleaseNotesSnapshot, bool>? saveNotes = null)
     {
         string folder = Path.GetDirectoryName(Path.GetFullPath(manifest))!;
         string backup = "", incoming = "";
@@ -70,6 +70,13 @@ static class UpdateHandoff
             }
             if (!Hash(plan.Target).Equals(plan.OriginalSha256, StringComparison.OrdinalIgnoreCase))
                 throw new InvalidDataException("The installed file changed since the update was requested.");
+            // New helpers also understand plans emitted by older islands. Their
+            // payload's bundled release archive fills the gap without a network.
+            var originalInfo = FileVersionInfo.GetVersionInfo(plan.Target);
+            var from = new Version(Math.Max(0, originalInfo.FileMajorPart), Math.Max(0, originalInfo.FileMinorPart), Math.Max(0, originalInfo.FileBuildPart));
+            Version destination = Version.Parse(plan.Version);
+            ReleaseNotesSnapshot? notes = plan.Notes?.Matches(from, destination) == true ? plan.Notes : null;
+            if (notes?.Complete != true) notes = BundledReleaseNotes.For(from < destination ? from : null, destination) ?? notes;
             canRestartOriginal = true;
             string suffix = Path.GetFileName(folder);
             incoming = plan.Target + ".update-" + suffix + ".new";
@@ -99,6 +106,17 @@ static class UpdateHandoff
                 await Task.Delay(100);
             }
             if (!acknowledged) throw new IOException("Updated application did not confirm startup.");
+            // Never commit history for an unacknowledged launch/rollback, and do
+            // not turn a cache write error into a failed executable installation.
+            if (notes?.Valid() == true)
+            {
+                try
+                {
+                    bool saved = saveNotes?.Invoke(notes) ?? (plan.TestArguments != null || new ReleaseNotesStore(ReleaseNotesStore.DefaultPath).SaveInstalled(notes));
+                    if (!saved) App.Log(new IOException("Could not save installed release notes."));
+                }
+                catch (Exception ex) { App.Log(ex); }
+            }
             try { File.Delete(backup); }
             catch (Exception ex) { App.Log(ex); }
             try { await WriteResult(folder, true, false, ""); }
@@ -119,7 +137,9 @@ static class UpdateHandoff
                         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(5));
                         await started.WaitForExitAsync(timeout.Token);
                     }
-                    File.Move(backup, plan.Target, true);
+                    // Process exit can precede release of the mapped image (or
+                    // a short antivirus scan). A single Move made rollback flaky.
+                    await RestoreBackupAsync(backup, plan.Target);
                     restored = Hash(plan.Target).Equals(plan.OriginalSha256, StringComparison.OrdinalIgnoreCase);
                     if (restored) using (Start(plan.Target, plan.TestArguments ?? [])) { }
                 }
@@ -153,6 +173,17 @@ static class UpdateHandoff
         catch (ArgumentException) { }
         catch (InvalidOperationException) { }
         return null;
+    }
+
+    internal static async Task RestoreBackupAsync(string backup, string target)
+    {
+        long deadline = Environment.TickCount64 + 5000;
+        while (true)
+        {
+            try { File.Move(backup, target, true); return; }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException && Environment.TickCount64 < deadline)
+            { await Task.Delay(100); }
+        }
     }
 
     public static void Acknowledge(string manifestReadyPath)

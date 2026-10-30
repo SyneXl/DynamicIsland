@@ -13,9 +13,9 @@ namespace DynamicIsland;
 
 public partial class MainWindow : Window
 {
-    enum View { Idle, Media, CinemaMedia, Timer, Record, Volume, Charge, Headset, Focus, Toast, Notice, MediaBig, IdleBig, TimerBig, TimerSet, RecordBig, RecordSet, Menu, Settings, Look, Shelf, Weather, Place, Qr, Update, Lyrics, Loading, Codex, MenuLayout, Zapret, ZapretFolders, ZapretStrategies, Throne, ThroneGroups, ThroneServers, Mixer, ShelfNote }
+    enum View { Idle, Media, CinemaMedia, Timer, Record, Volume, Charge, Headset, Focus, Toast, Notice, MediaBig, IdleBig, TimerBig, TimerSet, RecordBig, RecordSet, Menu, Settings, Look, Shelf, Weather, Place, Qr, Update, Lyrics, Loading, Codex, MenuLayout, Zapret, ZapretFolders, ZapretStrategies, Throne, ThroneGroups, ThroneServers, Mixer, ShelfNote, ReleaseNotes }
 
-    enum Panel { None, Player, Timer, TimerSet, Record, Menu, Settings, Look, Shelf, Weather, Place, Qr, Update, Lyrics, Codex, MenuLayout, Zapret, ZapretFolders, ZapretStrategies, Throne, ThroneGroups, ThroneServers, Mixer, ShelfNote }
+    enum Panel { None, Player, Timer, TimerSet, Record, Menu, Settings, Look, Shelf, Weather, Place, Qr, Update, Lyrics, Codex, MenuLayout, Zapret, ZapretFolders, ZapretStrategies, Throne, ThroneGroups, ThroneServers, Mixer, ShelfNote, ReleaseNotes }
 
     readonly record struct PillShape(double Width, double Height, double Radius);
 
@@ -56,6 +56,7 @@ public partial class MainWindow : Window
         [View.Place] = new(320, 200, 34),
         [View.Qr] = new(320, 104, 34),
         [View.Update] = new(320, 150, 34),
+        [View.ReleaseNotes] = new(360, 250, 34),
         [View.Lyrics] = new(352, 272, 34),
         [View.Loading] = new(118, 34, 17),
     };
@@ -165,6 +166,7 @@ public partial class MainWindow : Window
             [View.Qr] = QrView,
             [View.Codex] = CodexView,
             [View.Update] = UpdatePage,
+            [View.ReleaseNotes] = ReleaseNotesPage,
             [View.Lyrics] = LyricsPage,
             [View.Loading] = LoadingView,
         };
@@ -417,7 +419,7 @@ public partial class MainWindow : Window
             Safely(UpdateClock);
             if (_view == View.Codex) Safely(SyncCodex);
             if (_view == View.Mixer) Safely(RefreshMixer);
-            if (_view is View.Throne or View.ThroneGroups or View.ThroneServers) PollThrone();
+            if (ShouldPollThrone) PollThrone();
             if ((_view is View.Zapret or View.ZapretFolders or View.ZapretStrategies || _view == View.Menu && _menuButtons["zapret"].Visibility == Visibility.Visible)
                 && !_zapretBusy && Environment.TickCount64 - _zapretStatusAt > 2000) _ = RefreshZapretAsync();
             Safely(PollPower);
@@ -445,6 +447,7 @@ public partial class MainWindow : Window
             Panel.ZapretStrategies => View.ZapretStrategies,
             Panel.Codex => View.Codex,
             Panel.Update => View.Update,
+            Panel.ReleaseNotes => View.ReleaseNotes,
             Panel.Lyrics => View.Lyrics,
             Panel.Shelf => View.Shelf,
             Panel.ShelfNote => View.ShelfNote,
@@ -484,6 +487,11 @@ public partial class MainWindow : Window
         View previous = _view;
         PillShape from = ShapeOf(previous);
         _view = target;
+        if (target == View.IdleBig)
+        {
+            SyncHomeThrone();
+            if (!App.SmokeTest && ShowHomeThrone) PollThrone();
+        }
         if (target == View.MediaBig) UpdatePlayerLyrics(true);
         else ShowLyricsPlaceholder(false);
         PillShape to = ShapeOf(target);
@@ -531,6 +539,7 @@ public partial class MainWindow : Window
 
     static bool IsPageOf(View parent, View page) =>
         parent == View.Menu && MenuPages.Contains(page) || parent == View.Settings && SettingsPages.Contains(page)
+        || parent == View.Update && page == View.ReleaseNotes
         || parent == View.Weather && WeatherPages.Contains(page)
         || parent == View.Look && page == View.MenuLayout
         || parent == View.Shelf && page == View.ShelfNote
@@ -544,8 +553,10 @@ public partial class MainWindow : Window
         View.MediaBig when _playerHasLyricRoom => PillShapes[view] with { Height = PlayerHeight + PlayerLyricsHeight },
         View.RecordSet => PillShapes[view] with { Width = RecordSetView.Width },
         View.Update => PillShapes[view] with { Height = UpdatePage.Height },
+        View.ReleaseNotes => PillShapes[view] with { Height = ReleaseNotesPage.Height },
         View.Weather => PillShapes[view] with { Height = WeatherView.Height },
         View.Place => PillShapes[view] with { Height = PlaceView.Height },
+        View.IdleBig => PillShapes[view] with { Height = IdleBigView.Height },
         View.Look => PillShapes[view] with { Height = LookView.Height },
         View.Menu => PillShapes[view] with { Height = MenuView.Height },
         View.MenuLayout => PillShapes[view] with { Height = MenuLayoutView.Height },
@@ -564,6 +575,7 @@ public partial class MainWindow : Window
         if (force)
         {
             if (_panel == Panel.ShelfNote && !CommitShelfNote()) return;
+            CancelNetworkStartPrompt(Panel.None);
             EndMenuReorder(false);
             CancelGrab();
             CancelScrub();
@@ -592,6 +604,7 @@ public partial class MainWindow : Window
     void SelectPanel(Panel panel)
     {
         if (_panel == Panel.ShelfNote && panel != Panel.ShelfNote && !CommitShelfNote()) return;
+        CancelNetworkStartPrompt(panel);
         if (panel == Panel.Update) _updateAnnouncement.Consume();
         if (panel != Panel.MenuLayout) EndMenuReorder(false);
         if (panel != Panel.Player) CancelScrub();

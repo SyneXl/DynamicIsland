@@ -206,7 +206,8 @@ public partial class MainWindow
         else if (_view == View.Look && GapRow.IsMouseOver) SetGap(Settings.Gap + step * GapStep);
         else if (_view == View.Look) ScrollLook(-step);
         else if (_view == View.Shelf && ShelfOverflow > 0) ScrollShelf(-step);
-        else if (_view == View.Update) ScrollUpdateNotes(-step);
+        else if (_view == View.ReleaseNotes) ScrollUpdateNotes(-step);
+        else if (_view == View.Update) return;
         else if (_view == View.MediaBig && Settings.AppVolume && _audio.AdjustAppVolume(_media.Source, step * WheelVolumeStep, out float level))
             ShowPlayerVolume(level, false, true);
         else if (IsVolumeAtLimit(up)) OvershootVolume(up);

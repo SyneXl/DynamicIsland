@@ -40,7 +40,7 @@ sealed partial class Updater : IDisposable
     public long TotalBytes { get; private set; }
 
     public Updater(HttpClient? http = null, Version? current = null, string? target = null,
-        Action<VerifiedUpdate>? handoff = null, Func<string>? workspace = null, TimeSpan? stallTimeout = null)
+        Action<VerifiedUpdate>? handoff = null, Func<string>? workspace = null, TimeSpan? stallTimeout = null, ReleaseNotesStore? notesStore = null)
     {
         _http = http ?? SharedHttp;
         _current = current ?? CurrentVersion;
@@ -48,6 +48,8 @@ sealed partial class Updater : IDisposable
         _handoff = handoff ?? UpdateHandoff.Launch;
         _workspace = workspace ?? UpdateHandoff.NewFolder;
         _stallTimeout = stallTimeout ?? TimeSpan.FromSeconds(30);
+        _notesStore = notesStore ?? new ReleaseNotesStore(http == null && !App.SmokeTest ? ReleaseNotesStore.DefaultPath : null);
+        SelectReleaseNotes(false);
     }
 
     public async Task CheckAsync(bool force = false)
@@ -122,8 +124,10 @@ sealed partial class Updater : IDisposable
         {
             folder = _workspace();
             file = Path.Combine(folder, AssetName);
+            Task notes = LoadReleaseNotesAsync();
             await DownloadAsync(file);
-            _handoff(new(file, _target, _hash, LatestVersion!.ToString()));
+            await notes;
+            _handoff(new(file, _target, _hash, LatestVersion!.ToString(), ReleaseNotes));
             return true;
         }
         catch (Exception ex)
@@ -191,8 +195,13 @@ sealed partial class Updater : IDisposable
         http.DefaultRequestHeaders.Accept.ParseAdd("application/vnd.github+json");
         return http;
     }
-    void SetState(Stage stage) { State = stage; Changed?.Invoke(); }
+    void SetState(Stage stage)
+    {
+        State = stage;
+        if (stage is Stage.Available or Stage.Latest or Stage.NoRelease) SelectReleaseNotes(stage == Stage.Available);
+        Changed?.Invoke();
+    }
     public void Dispose() => _lifetime.Cancel();
 }
 
-sealed record VerifiedUpdate(string Payload, string Target, string Sha256, string Version);
+sealed record VerifiedUpdate(string Payload, string Target, string Sha256, string Version, ReleaseNotesSnapshot? Notes = null);

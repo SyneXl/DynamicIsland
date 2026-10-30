@@ -85,7 +85,7 @@ static partial class Program
         File.WriteAllText(Path.Combine(fixtureRoot, ".dynamic-island-test-fixtures"), "");
         string first = MakeZapretFixture(Path.Combine(fixtureRoot, "zapret-fixture-a"));
         string second = MakeZapretFixture(Path.Combine(fixtureRoot, "zapret-fixture-b"));
-        var names = new[] { "_zapretSystem", "_zapretPreferences", "_saveZapretPreferences", "_runZapretOperation", "_zapretRoot", "_zapretStrategy", "_zapretStatus", "_zapretMessage", "_zapretInstalling", "_zapretRefreshTask" };
+        var names = new[] { "_zapretSystem", "_zapretPreferences", "_saveZapretPreferences", "_runZapretOperation", "_zapretRoot", "_zapretStrategy", "_zapretStatus", "_zapretMessage", "_zapretInstalling", "_zapretRefreshTask", "_findThrone" };
         var originals = names.ToDictionary(n => n, n => typeof(MainWindow).GetField(n, Private)!.GetValue(window));
         var installs = (Dictionary<string, ZapretInstallation>)typeof(MainWindow).GetField("_zapretInstalls", Private)!.GetValue(window)!;
         var oldInstalls = installs.ToArray();
@@ -94,7 +94,8 @@ static partial class Program
         bool cancel = false;
         TaskCompletionSource<ZapretOperationResult>? pending = null;
         var panelType = typeof(MainWindow).GetNestedType("Panel", BindingFlags.NonPublic)!;
-        bool Busy() => (bool)typeof(MainWindow).GetField("_zapretBusy", Private)!.GetValue(window)!;
+        bool Busy() => (bool)typeof(MainWindow).GetField("_zapretBusy", Private)!.GetValue(window)!
+            || typeof(MainWindow).GetField("_networkStart", Private)!.GetValue(window) != null;
         void Until(Func<bool> condition)
         {
             long deadline = Environment.TickCount64 + 5000;
@@ -121,6 +122,7 @@ static partial class Program
         try
         {
             Set(window, "_zapretSystem", system);
+            Set(window, "_findThrone", (Func<ThronePreferences, ThroneDiscoveryResult>)(_ => new(null, null, false, false, null, null)));
             Set(window, "_zapretPreferences", ZapretPreferences.Empty);
             Set(window, "_saveZapretPreferences", (Func<ZapretPreferences, bool>)(_ => { saved++; return true; }));
             Set(window, "_runZapretOperation", (Func<bool, string?, string?, ZapretStatus, Task<ZapretOperationResult>>)((install, folder, strategy, status) =>

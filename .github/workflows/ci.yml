@@ -21,6 +21,8 @@ jobs:
         run: dotnet run --project Tests/DynamicIsland.Tests.csproj -c Release
       - name: Update verification and failure controls
         run: dotnet run --project Tests/DynamicIsland.Tests.csproj -c Release --no-build -- --updater-tests
+      - name: Multi-version release notes, offline journal and dedicated page
+        run: dotnet run --project Tests/DynamicIsland.Tests.csproj -c Release --no-build -- --release-notes-tests artifacts/release-notes
       - name: Update bubble, mixer and shelf controls
         run: dotnet run --project Tests/DynamicIsland.Tests.csproj -c Release --no-build -- --island-features-tests artifacts/island-features
       - name: Quiet appearance and interaction transitions
@@ -29,6 +31,8 @@ jobs:
         run: dotnet run --project Tests/DynamicIsland.Tests.csproj -c Release --no-build -- --mixer-parity-tests artifacts/mixer-parity
       - name: Throne protocol, controls and installer failure controls
         run: dotnet run --project Tests/DynamicIsland.Tests.csproj -c Release --no-build -- --throne-tests artifacts/throne
+      - name: Reciprocal VPN and Zapret conflict controls (isolated fakes)
+        run: dotnet run --project Tests/DynamicIsland.Tests.csproj -c Release --no-build -- --network-conflict-tests artifacts/network-conflict
       - name: Upstream integration
         run: dotnet run --project Tests/DynamicIsland.Tests.csproj -c Release --no-build -- --upstream-tests artifacts/ui
       - name: Media switching and late-request isolation

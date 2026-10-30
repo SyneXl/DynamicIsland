@@ -1,0 +1,10 @@
+Country flag images
+Source: https://github.com/hampusborgos/country-flags
+Revision: c09927e63705529bbf59ca6684cd9b23225dddad
+
+Upstream states that these flag images are in the public domain.
+Original source artwork is from Wikimedia Commons and contributors.
+
+Bundled PNGs were rendered locally from that revision's SVGs at 100px width
+with resvg_py 0.5.0. No image download or country geolocation is performed
+at runtime. Per-file source and output SHA-256 values: Assets/Flags/SOURCE.json.

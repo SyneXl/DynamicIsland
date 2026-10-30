@@ -55,6 +55,8 @@ public partial class App : Application
                     && window.FindName("MenuLayoutView") is FrameworkElement { Height: > 0 }
                     && window.FindName("MenuLayoutRow") != null
                     && window.FindName("UpdatePage") != null
+                    && window.FindName("ReleaseNotesPage") != null
+                    && window.FindName("UpdateWhatsNewButton") != null
                     && window.FindName("LoadingView") != null
                     && window.FindName("LyricsPage") != null
                     && window.FindName("HeadsetGadget") != null

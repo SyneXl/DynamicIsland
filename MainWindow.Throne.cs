@@ -22,8 +22,10 @@ public partial class MainWindow
     ThroneStatus? _throneStatus;
     ThroneGroup[] _throneGroups = [];
     ThroneProfile[] _throneProfiles = [];
+    int _throneObservedProfile = -1;
+    bool _throneObservedRunning;
     Task? _throneRefreshTask;
-    bool _throneLoading, _throneBusy, _throneTesting, _throneDownloading, _throneClosed, _throneReadError;
+    bool _throneLoading, _throneBusy, _throneTesting, _throneDownloading, _throneClosed, _throneReadError, _throneConnectionRefused;
     int? _throneJob;
     long _thronePolledAt;
     string _throneMessage = "";
@@ -39,6 +41,7 @@ public partial class MainWindow
         Closed += (_, _) =>
         {
             _throneClosed = true; _throneLifetime.Cancel();
+            _networkConflictAnswer?.TrySetResult(null);
             _throneInstallation?.Endpoint?.Dispose();
         };
         if (!App.SmokeTest) Loaded += async (_, _) => await RefreshThroneAsync(true);
@@ -66,6 +69,7 @@ public partial class MainWindow
     async Task RefreshThroneCoreAsync(bool discover)
     {
         _throneLoading = discover; if (discover) SyncThrone();
+        _throneConnectionRefused = false;
         await _throneGate.WaitAsync();
         try
         {
@@ -88,16 +92,22 @@ public partial class MainWindow
             {
                 _throneStatus = ThroneStatus.Parse(await _throneApi.CallAsync("GET", "/v1/status", cancel: _throneLifetime.Token));
                 if (_throneReadError) { _throneMessage = ""; _throneReadError = false; }
-                if (discover)
+                bool followActive = ShouldFollowThroneActive;
+                if (discover || followActive && !_throneProfiles.Any(p => p.Id == _throneStatus.ProfileId))
                 {
                     _throneGroups = ThroneData.Groups(await _throneApi.CallAsync("GET", "/v1/groups", cancel: _throneLifetime.Token));
                     _throneProfiles = ThroneData.Profiles(await _throneApi.CallAsync("GET", "/v1/profiles", cancel: _throneLifetime.Token));
-                    NormalizeThroneSelection();
                 }
+                ReconcileThroneSelection(followActive, discover);
             }
         }
         catch (OperationCanceledException) when (_throneClosed) { }
-        catch (Exception ex) { _throneStatus = null; _throneReadError = true; _throneMessage = ThroneError(ex); }
+        catch (Exception ex)
+        {
+            _throneStatus = null; _throneReadError = true;
+            _throneConnectionRefused = ex is SocketException { SocketErrorCode: SocketError.ConnectionRefused };
+            _throneMessage = ThroneError(ex);
+        }
         finally
         {
             _thronePolledAt = Environment.TickCount64; _throneLoading = false; _throneGate.Release();
@@ -107,6 +117,23 @@ public partial class MainWindow
                 if (discover) { FillThroneGroups(); FillThroneServers(); }
             }
         }
+    }
+
+    bool ShouldFollowThroneActive => _throneStatus is { Running: true, ProfileId: >= 0 }
+        && (!_throneObservedRunning || _throneObservedProfile != _throneStatus.ProfileId);
+
+    void ReconcileThroneSelection(bool followActive, bool normalize)
+    {
+        if (_throneStatus == null) return;
+        if (followActive)
+        {
+            var active = _throneProfiles.FirstOrDefault(p => p.Id == _throneStatus.ProfileId);
+            _thronePreferences = _thronePreferences with { Profile = _throneStatus.ProfileId, Group = active?.Group ?? _thronePreferences.Group };
+        }
+        else if (normalize) NormalizeThroneSelection();
+        _throneObservedRunning = _throneStatus.Running;
+        if (_throneStatus.Running) _throneObservedProfile = _throneStatus.ProfileId;
+        if (followActive) { FillThroneGroups(); FillThroneServers(); }
     }
 
     void NormalizeThroneSelection()
@@ -164,7 +191,10 @@ public partial class MainWindow
         ThroneOpen.Visibility = !connected && _throneInstallation?.Executable != null ? Visibility.Visible : Visibility.Collapsed;
         ThroneState.Text = _throneBusy ? "Переключаю…" : _throneStatus?.State switch { "running" => "Включён", "idle" => "Выключен", "connecting" => "Подключаю…", "stopping" => "Отключаю…", _ => "Нет связи" };
         ThroneState.Foreground = running ? _green : _dim;
-        ThroneActive.Text = running ? _throneStatus!.ProfileName : "";
+        var activeLabel = CountryFlags.Parse(running ? _throneStatus!.ProfileName : "");
+        ThroneActive.Text = activeLabel.Label;
+        ThroneActiveFlag.Code = activeLabel.Code;
+        ThroneActiveRow.Visibility = running ? Visibility.Visible : Visibility.Collapsed;
         ThroneActive.Visibility = running ? Visibility.Visible : Visibility.Collapsed;
         ThroneAction.IsEnabled = connected && !changing && !_throneLoading && !_throneTesting && (running || _thronePreferences.Profile >= 0 || _throneStatus?.LastProfileId >= 0);
         ThronePlay.Visibility = !running && !changing ? Visibility.Visible : Visibility.Collapsed;
@@ -174,7 +204,11 @@ public partial class MainWindow
         ThroneAction.ToolTip = action; AutomationProperties.SetName(ThroneAction, action);
         MenuThrone.Text = connected ? running ? "Вкл." : _throneStatus?.Transitioning == true ? "…" : "Выкл." : "";
         ThroneGroupText.Text = _throneGroups.FirstOrDefault(g => g.Id == _thronePreferences.Group)?.Name ?? "Нет групп";
-        ThroneServerText.Text = _throneProfiles.FirstOrDefault(p => p.Id == _thronePreferences.Profile)?.Name ?? "Нет серверов";
+        string? selectedName = running && _thronePreferences.Profile == _throneStatus!.ProfileId && _throneStatus.ProfileName.Length > 0
+            ? _throneStatus.ProfileName : _throneProfiles.FirstOrDefault(p => p.Id == _thronePreferences.Profile)?.Name;
+        var serverLabel = CountryFlags.Parse(selectedName ?? "Нет серверов");
+        ThroneServerText.Text = serverLabel.Label;
+        ThroneServerFlag.Code = serverLabel.Code;
         ThroneGroupButton.IsEnabled = ThroneServerButton.IsEnabled = connected && !changing && !_throneLoading && !_throneTesting;
         ThronePing.Content = _throneTesting ? "Остановить тест" : "Проверить пинг";
         ThronePing.IsEnabled = connected && !_throneBusy && (_throneTesting ? _throneJob != null : _throneProfiles.Any(p => p.Group == _thronePreferences.Group && p.Type != "autoselector"));
@@ -187,16 +221,21 @@ public partial class MainWindow
         // disabled in a compatible install; that calls for setup, not reinstall.
         ThroneInstallOffer.Visibility = _throneInstallerFile != null && !capable && !connected ? Visibility.Visible : Visibility.Collapsed;
         ThroneRunInstaller.IsEnabled = !_throneInstalling;
+        ThroneHomeRow.Visibility = capable || connected ? Visibility.Visible : Visibility.Collapsed;
+        ThroneHomeSwitch.Set(_thronePreferences.ShowOnHome, false);
+        SyncHomeThrone();
         ThroneContent.Measure(new Size(340, double.PositiveInfinity));
         ThroneView.Height = Math.Clamp(ThroneContent.DesiredSize.Height, 220, 480);
         if (_view == View.Throne) UpdateTargets();
+        SyncNetworkConflict();
     }
 
     async void ThroneAction_Click(object sender, RoutedEventArgs e)
     {
         if (!ThroneAction.IsEnabled || _throneBusy || _throneApi == null) return;
         bool start = _throneStatus?.Running != true;
-        await ChangeThroneAsync(start, _thronePreferences.Profile);
+        if (start) await StartNetworkAsync(NetworkApp.Throne);
+        else if (_networkStart == null) await ChangeThroneAsync(false, _thronePreferences.Profile);
     }
     async Task<bool> ChangeThroneAsync(bool start, int profile)
     {
@@ -208,6 +247,7 @@ public partial class MainWindow
             object body = start ? profile >= 0 ? new { profile, wait = false } : new { select = "last", wait = false } : new { wait = false };
             var result = await _throneApi.CallAsync(start ? "PUT" : "DELETE", "/v1/connection", body, cancel: _throneLifetime.Token);
             _throneStatus = ThroneStatus.Parse(result); // 202 is a transition, never fabricated success
+            _thronePolledAt = Environment.TickCount64;
             return true;
         }
         catch (OperationCanceledException) when (_throneClosed) { return false; }
@@ -223,11 +263,14 @@ public partial class MainWindow
     {
         ShowPanel(Panel.ThroneServers); ThroneServerFilter.Text = ""; FillThroneServers(); await RefreshThroneAsync(true);
     }
-    Button ThroneChoice(string title, string detail, bool selected, int id, Action choose)
+    Button ThroneChoice(string title, string detail, bool selected, int id, Action choose, bool server = false)
     {
         var grid = new Grid();
         grid.ColumnDefinitions.Add(new() { Width = new GridLength(1, GridUnitType.Star) }); grid.ColumnDefinitions.Add(new() { Width = new GridLength(82) });
-        grid.Children.Add(new TextBlock { Text = title, TextTrimming = TextTrimming.CharacterEllipsis, VerticalAlignment = VerticalAlignment.Center, Margin = new(0, 0, 8, 0) });
+        var label = server ? CountryFlags.Parse(title) : new CountryFlags.LabelInfo(null, title);
+        var text = new TextBlock { Text = label.Label, TextTrimming = TextTrimming.CharacterEllipsis, VerticalAlignment = VerticalAlignment.Center, Margin = new(label.Code == null ? 0 : 30, 0, 8, 0) };
+        grid.Children.Add(text);
+        if (label.Code != null) grid.Children.Add(new CountryFlag { Code = label.Code, Width = 20, Height = 14, HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Center });
         var tail = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Center };
         tail.Children.Add(new TextBlock { Text = detail, Foreground = _dim, FontSize = 11, VerticalAlignment = VerticalAlignment.Center });
         if (selected) tail.Children.Add(new Icon { Kind = Glyph.Check, Width = 12, Height = 12, Fill = Brushes.White, Margin = new(8, 0, 0, 0) });
@@ -259,15 +302,15 @@ public partial class MainWindow
         string filter = ThroneServerFilter.Text.Trim();
         var profiles = ThroneData.Sorted(_throneProfiles.Where(p => p.Group == _thronePreferences.Group && p.Name.Contains(filter, StringComparison.CurrentCultureIgnoreCase)), _thronePreferences.SortByLatency);
         foreach (var profile in profiles)
-            ThroneServerRows.Children.Add(ThroneChoice(profile.Name, ThroneData.LatencyText(profile.Latency), profile.Id == _thronePreferences.Profile, profile.Id, async () =>
+            ThroneServerRows.Children.Add(ThroneChoice(profile.Name, ThroneData.LatencyText(profile.Latency), profile.Id == (_throneStatus?.Running == true ? _throneStatus.ProfileId : _thronePreferences.Profile), profile.Id, async () =>
             {
-                if (_throneBusy || _throneTesting) return;
+                if (_networkStart != null || _throneBusy || _throneTesting) return;
                 // Choosing a server switches an existing connection; offline it
                 // only chooses the next start, without silently enabling a VPN.
-                if (_throneStatus?.Running == true && !await ChangeThroneAsync(true, profile.Id)) { FillThroneServers(); return; }
+                if (_throneStatus?.Running == true && !await StartNetworkAsync(NetworkApp.Throne, profile.Id, replaceRunning: true)) { FillThroneServers(); return; }
                 if (SaveThrone(_thronePreferences with { Profile = profile.Id })) ShowPanel(Panel.Throne);
                 SyncThrone();
-            }));
+            }, server: true));
         ThroneServerNote.Text = _throneTesting ? "Проверяю задержку через серверы…" : profiles.Length == 0 ? "Серверы не найдены" : _throneMessage;
         ThroneServersView.Height = Math.Clamp(146 + profiles.Length * 46 + (ThroneServerNote.Text.Length > 0 ? 28 : 0), 238, 466);
         if (_view == View.ThroneServers) UpdateTargets();

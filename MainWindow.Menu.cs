@@ -1,6 +1,7 @@
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
+using System.Windows.Documents;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
 using static DynamicIsland.Motion;
@@ -19,12 +20,22 @@ public partial class MainWindow
     Border? _openLookTiles;
     readonly Spring _lookScroll = new(0, 260, 30);
     readonly Spring _updateNotesScroll = new(0, 260, 30);
+    ReleaseNotesSnapshot? _shownReleaseNotes;
+    bool _releaseNotesLoadQueued;
 
     void SettingsRow_Click(object sender, RoutedEventArgs e) => ShowPanelAndCheckUpdate(Panel.Settings);
 
     void UpdateRow_Click(object sender, RoutedEventArgs e) => ShowPanelAndCheckUpdate(Panel.Update);
 
     void UpdateBack_Click(object sender, RoutedEventArgs e) => ShowPanel(Panel.Settings);
+    async void UpdateWhatsNew_Click(object sender, RoutedEventArgs e)
+    {
+        _updater.ReloadSavedReleaseNotes();
+        RefreshReleaseNotesPage(); ShowPanel(Panel.ReleaseNotes);
+        await _updater.LoadReleaseNotesAsync();
+    }
+    void ReleaseNotesBack_Click(object sender, RoutedEventArgs e) => ShowPanel(Panel.Update);
+    async void ReleaseNotesRefresh_Click(object sender, RoutedEventArgs e) => await _updater.LoadReleaseNotesAsync(true);
 
     void ShowPanelAndCheckUpdate(Panel panel)
     {
@@ -157,10 +168,18 @@ public partial class MainWindow
         };
         UpdateError.Text = _updater.Error;
         UpdateError.SetVisible(stage == Updater.Stage.Failed && _updater.Error.Length > 0);
-        UpdateNotes.SetVisible(found && _updater.Notes.Length > 0);
-        string notes = string.Join('\n', _updater.Notes.Select(note => "·  " + note));
-        if (UpdateNotesText.Text != notes) _updateNotesScroll.Snap(0);
-        UpdateNotesText.Text = notes;
+        RefreshReleaseNotesPage();
+        if (!App.SmokeTest && _view == View.ReleaseNotes && _updater.NeedsReleaseNotesLoad && !_releaseNotesLoadQueued)
+        {
+            // A version check may finish after this child page was opened.
+            // Queue outside Changed/finally so a completed old task can be replaced.
+            _releaseNotesLoadQueued = true;
+            _ = Dispatcher.InvokeAsync(() =>
+            {
+                _releaseNotesLoadQueued = false;
+                if (_view == View.ReleaseNotes && _updater.NeedsReleaseNotesLoad) _ = _updater.LoadReleaseNotesAsync();
+            });
+        }
 
         UpdateButton.SetVisible(!loading);
         UpdateButton.IsEnabled = stage != Updater.Stage.Checking;
@@ -179,6 +198,35 @@ public partial class MainWindow
         if (loading) ShowUpdateProgress();
         FitUpdatePage();
         UpdateView();
+    }
+
+    void RefreshReleaseNotesPage()
+    {
+        var notes = _updater.ReleaseNotes;
+        if (!ReferenceEquals(notes, _shownReleaseNotes))
+        {
+            _shownReleaseNotes = notes;
+            _updateNotesScroll.Snap(0); UpdateNotesText.Inlines.Clear();
+            foreach (var release in notes?.Releases ?? [])
+            {
+                if (UpdateNotesText.Inlines.Count > 0) { UpdateNotesText.Inlines.Add(new LineBreak()); UpdateNotesText.Inlines.Add(new LineBreak()); }
+                UpdateNotesText.Inlines.Add(new Run(release.Version) { FontSize = 17, FontWeight = FontWeights.SemiBold, Foreground = Brushes.White });
+                foreach (string line in release.Lines.Length > 0 ? release.Lines : ["Описание не добавлено"])
+                {
+                    UpdateNotesText.Inlines.Add(new LineBreak()); UpdateNotesText.Inlines.Add(new Run("•  " + line));
+                }
+            }
+        }
+        UpdateNotes.SetVisible(notes != null);
+        ReleaseNotesRange.Text = notes == null ? "" : notes.From == null ? notes.To : notes.From + " → " + notes.To;
+        ReleaseNotesRange.SetVisible(notes != null);
+        ReleaseNotesMessage.Text = _updater.NotesLoading ? "Загружаю изменения…" : _updater.NotesError.Length > 0 ? _updater.NotesError
+            : notes == null ? "Список изменений пока недоступен" : !notes.Complete ? "Не все описания удалось загрузить" : "";
+        ReleaseNotesMessage.SetVisible(ReleaseNotesMessage.Text.Length > 0);
+        ReleaseNotesRefresh.IsEnabled = !_updater.NotesLoading;
+        ReleaseNotesBody.Measure(new Size(ReleaseNotesPage.Width, double.PositiveInfinity));
+        double height = Math.Clamp(Math.Ceiling(ReleaseNotesBody.DesiredSize.Height) + UpdatePagePadding, 150, 460);
+        if (ReleaseNotesPage.Height != height) { ReleaseNotesPage.Height = height; if (_view == View.ReleaseNotes) UpdateTargets(); }
     }
 
     void ShowUpdateProgress()

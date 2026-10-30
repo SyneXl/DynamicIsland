@@ -11,7 +11,7 @@
     <AssemblyName>DynamicIsland</AssemblyName>
     <RootNamespace>DynamicIsland</RootNamespace>
     <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
-    <Version>1.32.2</Version>
+    <Version>1.32.3</Version>
   </PropertyGroup>
 
   <!-- Deterministic media-provider doubles are opt-in for regression tests only. -->
@@ -25,8 +25,14 @@
     <Compile Remove="Tests\**\*.cs" />
     <Resource Include="Fonts\*.otf;Fonts\*.ttf" />
     <Resource Include="Gadgets\*.png" />
+    <Resource Include="Assets\Flags\*.png" />
     <EmbeddedResource Include="Notices\UsageLoop-MIT.txt" />
     <EmbeddedResource Include="Notices\Throne-api-MIT.txt;Notices\BouncyCastle-MIT.txt" />
+    <EmbeddedResource Include="Notices\Country-flags-Public-Domain.txt" />
+    <EmbeddedResource Include="docs\releases\v*.md">
+      <LogicalName>DynamicIsland.ReleaseNotes.%(Filename)</LogicalName>
+    </EmbeddedResource>
+    <EmbeddedResource Include="docs\releases\published.json" LogicalName="DynamicIsland.ReleaseNotes.Published" />
   </ItemGroup>
 
   <ItemGroup Condition="'$(MediaTestApi)' == 'true'">
